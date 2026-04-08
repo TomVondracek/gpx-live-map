@@ -7,7 +7,7 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
   <style>
     body { margin:0; }
     #map { height:100vh; }
@@ -19,6 +19,7 @@
 
 <script>
 const SHEET_URL = "https://script.google.com/macros/s/AKfycbxZli-8aEpEKd6rV8pzFsC73EDI3h-dNIOmBBj4T967HKWxaL-a431b6C21QBOJpEWr/exec";
+const GPX_URL = "./trasa.gpx";
 
 const map = L.map('map').setView([49.8, 18.27], 13);
 
@@ -27,34 +28,65 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let markers = [];
+let firstFitDone = false;
+
+let gpxLayer = new L.GPX(GPX_URL, {
+  async: true,
+  marker_options: {
+    startIconUrl: null,
+    endIconUrl: null,
+    shadowUrl: null
+  }
+}).on("loaded", function(e) {
+  const bounds = e.target.getBounds();
+  if (bounds.isValid()) {
+    map.fitBounds(bounds.pad(0.1));
+    firstFitDone = true;
+  }
+}).addTo(map);
 
 async function loadData() {
-  const res = await fetch(SHEET_URL);
+  const res = await fetch(SHEET_URL, { cache: "no-store" });
   const data = await res.json();
 
-  // vymazat staré markery
   markers.forEach(m => map.removeLayer(m));
   markers = [];
 
-  data.forEach(point => {
-    if (!point.lat || !point.lon) return;
+  const validPoints = data.filter(point =>
+    point &&
+    point.lat !== null &&
+    point.lon !== null &&
+    point.lat !== "" &&
+    point.lon !== "" &&
+    !Number.isNaN(Number(point.lat)) &&
+    !Number.isNaN(Number(point.lon))
+  );
 
-    const marker = L.marker([point.lat, point.lon]).addTo(map);
+  validPoints.forEach(point => {
+    const lat = Number(point.lat);
+    const lon = Number(point.lon);
+
+    const marker = L.marker([lat, lon]).addTo(map);
 
     marker.bindPopup(`
-      <b>${point.time}</b><br/>
-      ${point.note}
+      <b>${point.time ?? ""}</b><br/>
+      ${point.note ?? ""}
     `);
 
     markers.push(marker);
   });
+
+  if (validPoints.length > 0 && !firstFitDone) {
+    const bounds = L.latLngBounds(validPoints.map(p => [Number(p.lat), Number(p.lon)]));
+    if (bounds.isValid()) {
+      map.fitBounds(bounds.pad(0.2));
+      firstFitDone = true;
+    }
+  }
 }
 
-// první načtení
 loadData();
-
-// refresh každých 30 sekund
-setInterval(loadData, 30000);
+setInterval(loadData, 10000);
 </script>
 
 </body>
