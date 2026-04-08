@@ -5,12 +5,16 @@ const SHEET_URL =
 const DB_NAME = "beh-poznamky-db";
 const STORE_NAME = "queue";
 const SYNC_TAG = "sync-notes";
+const SPEECH_LANG = "cs-CZ";
 
 // ── Stav aplikace ────────────────────────────────────────────────────────────
 let recognition = null;
 let isRecording = false;
 let currentTranscript = "";
 let batteryLevel = null;
+let speechRecognitionCtor = null;
+let speechMode = "unavailable";
+let onDeviceAvailability = "unknown";
 
 // ── IndexedDB ─────────────────────────────────────────────────────────────────
 function openDB() {
@@ -84,23 +88,24 @@ async function initBattery() {
 }
 
 // ── Speech Recognition ────────────────────────────────────────────────────────
-function initSpeech() {
-  const SpeechRecognition =
+async function initSpeech() {
+  speechRecognitionCtor =
     window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  if (!SpeechRecognition) {
+  if (!speechRecognitionCtor) {
     document.getElementById("btn-record").disabled = true;
     showError(
       "Hlasové rozpoznávání není podporováno. Použij Chrome na Androidu."
     );
-    setStatusNote("STT: nepodporováno");
+    speechMode = "unavailable";
     return;
   }
 
-  recognition = new SpeechRecognition();
-  recognition.lang = "cs-CZ";
+  recognition = new speechRecognitionCtor();
+  recognition.lang = SPEECH_LANG;
   recognition.continuous = false;   // jednorázový režim — žádné duplicity
   recognition.interimResults = true;
+  recognition.processLocally = false;
 
   recognition.onaudiostart = () => {
     setRecordingUI(true);
@@ -126,9 +131,14 @@ function initSpeech() {
   recognition.onerror = (event) => {
     isRecording = false;
     setRecordingUI(false);
-    if (event.error === "network") {
+    if (event.error === "language-not-supported") {
+      speechMode = navigator.onLine ? "cloud" : "local-missing";
       showError(
-        "STT nefunguje offline. Stáhni český offline jazykový balíček:\nNastavení Androidu → Správa obecná → Jazyk a zadávání → Hlasový vstup Google → Stáhnout jazyky → Čeština."
+        "Offline čeština není v zařízení dostupná. Připoj telefon k internetu, klepni znovu na Mluvit a aplikace se pokusí jazykový balíček stáhnout."
+      );
+    } else if (event.error === "network") {
+      showError(
+        "STT v síťovém režimu selhalo. Pokud má zařízení podporu offline češtiny, připoj telefon jednou k internetu a zkus znovu stáhnout jazykový balíček."
       );
     } else if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       showError(
@@ -148,8 +158,220 @@ function initSpeech() {
       stopRecording();
     }
   };
+  await probeOnDeviceSpeech();
+  await updateStatus();
+}
 
-  setStatusNote("STT připraven");
+async function probeOnDeviceSpeech() {
+  onDeviceAvailability = "unknown";
+
+  if (!recognition || !speechRecognitionCtor) {
+    speechMode = "unavailable";
+    return;
+  }
+
+  const supportsOnDevice =
+    "processLocally" in recognition &&
+    typeof speechRecognitionCtor.available === "function" &&
+    typeof speechRecognitionCtor.install === "function";
+
+  if (!supportsOnDevice) {
+    speechMode = navigator.onLine ? "cloud" : "cloud-offline-blocked";
+    return;
+  }
+
+  try {
+    onDeviceAvailability = await speechRecognitionCtor.available({
+      langs: [SPEECH_LANG],
+      processLocally: true,
+    });
+  } catch {
+    speechMode = navigator.onLine ? "cloud" : "cloud-offline-blocked";
+    return;
+  }
+
+  if (onDeviceAvailability === "available") {
+    speechMode = "local-ready";
+  } else if (
+    onDeviceAvailability === "downloadable" ||
+    onDeviceAvailability === "downloading"
+  ) {
+    speechMode = navigator.onLine ? "local-installable" : "local-pending-download";
+  } else {
+    speechMode = navigator.onLine ? "cloud" : "cloud-offline-blocked";
+  }
+}
+
+async function ensureSpeechReady() {
+  await probeOnDeviceSpeech();
+
+  if (!recognition) {
+    return false;
+  }
+
+  if (onDeviceAvailability === "available") {
+    recognition.processLocally = true;
+    speechMode = "local-ready";
+    return true;
+  }
+
+  if (
+    (onDeviceAvailability === "downloadable" ||
+      onDeviceAvailability === "downloading") &&
+    navigator.onLine &&
+    typeof speechRecognitionCtor.install === "function"
+  ) {
+    document.getElementById("btn-record").disabled = true;
+    document.getElementById("btn-record").textContent = "STAHUJI…";
+    showError("Stahuji češtinu pro offline diktování. Chvilku strpení…");
+
+    try {
+      const installed = await speechRecognitionCtor.install({
+        langs: [SPEECH_LANG],
+      });
+
+      await probeOnDeviceSpeech();
+
+      if (installed && onDeviceAvailability === "available") {
+        recognition.processLocally = true;
+        speechMode = "local-ready";
+        document.getElementById("section-error").classList.add("hidden");
+        return true;
+      }
+
+      showError(
+        "Čeština pro offline diktování se nepodařila nainstalovat. Zkus to znovu online, případně ověř podporu v aktuální verzi Chrome."
+      );
+      return false;
+    } catch (e) {
+      showError("Stažení offline češtiny selhalo: " + e.message);
+      return false;
+    } finally {
+      document.getElementById("btn-record").disabled = false;
+      setRecordingUI(false);
+      await updateStatus();
+    }
+  }
+
+  recognition.processLocally = false;
+  if (!navigator.onLine) {
+    speechMode = "cloud-offline-blocked";
+    showError(
+      "Offline diktování není na tomto zařízení zatím připravené. Připoj telefon k internetu a spusť diktování jednou online, aby šlo případně stáhnout češtinu pro lokální rozpoznávání."
+    );
+    return false;
+  }
+
+  speechMode = "cloud";
+  return true;
+}
+
+function getSpeechStatusText() {
+  switch (speechMode) {
+    case "local-ready":
+      return "STT: offline";
+    case "local-installable":
+      return "STT: offline ke stažení";
+    case "local-pending-download":
+      return "STT: offline čeká na internet";
+    case "cloud":
+      return "STT: online";
+    case "cloud-offline-blocked":
+      return "STT: offline nedostupné";
+    case "local-missing":
+      return "STT: chybí čeština";
+    case "unavailable":
+      return "STT: nepodporováno";
+    default:
+      return "STT: zjišťuji";
+  }
+}
+
+function getOnDeviceSupportText() {
+  if (!recognition || !speechRecognitionCtor) return "ne";
+
+  const supportsOnDevice =
+    "processLocally" in recognition &&
+    typeof speechRecognitionCtor.available === "function" &&
+    typeof speechRecognitionCtor.install === "function";
+
+  return supportsOnDevice ? "ano" : "ne";
+}
+
+function getAvailabilityText() {
+  switch (onDeviceAvailability) {
+    case "available":
+      return "nainstalováno";
+    case "downloadable":
+      return "lze stáhnout";
+    case "downloading":
+      return "stahuje se";
+    case "unavailable":
+      return "není dostupná";
+    case "unknown":
+    default:
+      return "neznámé";
+  }
+}
+
+function getModeDetailText() {
+  switch (speechMode) {
+    case "local-ready":
+      return "lokální rozpoznávání v zařízení";
+    case "local-installable":
+      return "offline balíček je dostupný ke stažení";
+    case "local-pending-download":
+      return "offline balíček čeká na internet";
+    case "cloud":
+      return "síťové rozpoznávání přes browser";
+    case "cloud-offline-blocked":
+      return "jen cloud, offline teď nepůjde";
+    case "local-missing":
+      return "on-device režim selhal kvůli chybějící češtině";
+    case "unavailable":
+      return "browser STT nepodporuje";
+    default:
+      return "zjišťuji";
+  }
+}
+
+function getDiagnosticHint() {
+  switch (speechMode) {
+    case "local-ready":
+      return "Můžeš přepnout telefon offline a diktovat dál.";
+    case "local-installable":
+      return "Klepni na Mluvit online; aplikace zkusí stáhnout češtinu.";
+    case "local-pending-download":
+      return "Připoj telefon k internetu a spusť diktování jednou online.";
+    case "cloud":
+      return "Diktování funguje, ale bez internetu nepoběží.";
+    case "cloud-offline-blocked":
+      return "Na tomto zařízení zatím není připravené offline STT.";
+    case "local-missing":
+      return "Zkus znovu online, aby šlo stáhnout český jazykový balíček.";
+    case "unavailable":
+      return "Použij novější Chrome na Androidu.";
+    default:
+      return "Probíhá detekce schopností zařízení.";
+  }
+}
+
+function updateDiagnostics() {
+  const apiEl = document.getElementById("diag-api");
+  const onDeviceEl = document.getElementById("diag-ondevice");
+  const langEl = document.getElementById("diag-lang");
+  const modeEl = document.getElementById("diag-mode");
+  const hintEl = document.getElementById("diag-hint");
+
+  if (!apiEl || !onDeviceEl || !langEl || !modeEl || !hintEl) {
+    return;
+  }
+
+  apiEl.textContent = speechRecognitionCtor ? "podporováno" : "nepodporováno";
+  onDeviceEl.textContent = getOnDeviceSupportText();
+  langEl.textContent = getAvailabilityText();
+  modeEl.textContent = getModeDetailText();
+  hintEl.textContent = getDiagnosticHint();
 }
 
 // ── Ovládání nahrávání ────────────────────────────────────────────────────────
@@ -178,6 +400,12 @@ async function startRecording() {
   document.getElementById("transcript").textContent = "";
   document.getElementById("section-confirm").classList.add("hidden");
   document.getElementById("section-error").classList.add("hidden");
+
+  const speechReady = await ensureSpeechReady();
+  if (!speechReady) {
+    await updateStatus();
+    return;
+  }
 
   // isRecording = true PŘED start() — předchází race condition s onend
   isRecording = true;
@@ -337,19 +565,16 @@ function showSuccess(msg) {
   setTimeout(() => el.classList.add("hidden"), 3000);
 }
 
-// Dočasná poznámka ve status baru (přepíše se při příštím updateStatus)
-function setStatusNote(msg) {
-  document.getElementById("status-bar").textContent = msg;
-}
-
 async function updateStatus() {
   const queueCount = await getQueueCount();
   const onlineText = navigator.onLine ? "Online" : "Offline";
   const batteryText = batteryLevel !== null ? `Baterie: ${batteryLevel}%` : "";
   const queueText = queueCount > 0 ? `Čekají: ${queueCount}` : "";
+  const speechText = getSpeechStatusText();
 
   document.getElementById("status-bar").textContent =
-    [onlineText, batteryText, queueText].filter(Boolean).join("  ·  ");
+    [onlineText, speechText, batteryText, queueText].filter(Boolean).join("  ·  ");
+  updateDiagnostics();
 }
 
 // ── Service Worker zprávy ─────────────────────────────────────────────────────
@@ -373,15 +598,19 @@ async function init() {
   }
 
   await initBattery();
-  initSpeech();
+  await initSpeech();
   await updateStatus();
 
   // Online/offline události
   window.addEventListener("online", async () => {
+    await probeOnDeviceSpeech();
     await updateStatus();
     scheduleBackgroundSync();
   });
-  window.addEventListener("offline", updateStatus);
+  window.addEventListener("offline", async () => {
+    await probeOnDeviceSpeech();
+    await updateStatus();
+  });
 
   // Tlačítka
   document.getElementById("btn-record").addEventListener("click", async () => {

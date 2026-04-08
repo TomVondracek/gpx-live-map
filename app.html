@@ -133,6 +133,56 @@
       font-style: italic;
     }
 
+    /* ── Diagnostika STT ── */
+    #diagnostics {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+    }
+
+    #diagnostics summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      user-select: none;
+    }
+
+    #diagnostics summary::marker,
+    #diagnostics summary::-webkit-details-marker {
+      color: var(--muted);
+    }
+
+    #diagnostics-body {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .diag-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.85rem;
+      line-height: 1.35;
+    }
+
+    .diag-label {
+      color: var(--muted);
+      flex: 0 0 42%;
+    }
+
+    .diag-value {
+      color: var(--text);
+      text-align: right;
+      word-break: break-word;
+    }
+
     /* ── Sekce potvrzení ── */
     #section-confirm {
       display: flex;
@@ -227,6 +277,32 @@
     <div id="transcript-box">
       <div id="transcript"></div>
     </div>
+
+    <details id="diagnostics">
+      <summary>Diagnostika STT</summary>
+      <div id="diagnostics-body">
+        <div class="diag-row">
+          <div class="diag-label">Web Speech API</div>
+          <div class="diag-value" id="diag-api">zjišťuji…</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-label">On-device API</div>
+          <div class="diag-value" id="diag-ondevice">zjišťuji…</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-label">Čeština offline</div>
+          <div class="diag-value" id="diag-lang">zjišťuji…</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-label">Aktivní režim</div>
+          <div class="diag-value" id="diag-mode">zjišťuji…</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-label">Doporučení</div>
+          <div class="diag-value" id="diag-hint">Počkej na inicializaci.</div>
+        </div>
+      </div>
+    </details>
 
     <div id="section-confirm" class="hidden">
       <button class="btn" id="btn-send">Odeslat</button>
