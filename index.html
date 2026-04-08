@@ -45,6 +45,29 @@ let gpxLayer = new L.GPX(GPX_URL, {
   }
 }).addTo(map);
 
+const redIcon = L.icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+function formatTime(raw) {
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleString("cs-CZ", {
+    timeZone: "Europe/Prague",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 async function loadData() {
   const res = await fetch(SHEET_URL, { cache: "no-store" });
   const data = await res.json();
@@ -62,16 +85,19 @@ async function loadData() {
     !Number.isNaN(Number(point.lon))
   );
 
-  validPoints.forEach(point => {
+  validPoints.forEach((point, index) => {
+    const isLast = index === validPoints.length - 1;
     const lat = Number(point.lat);
     const lon = Number(point.lon);
 
-    const marker = L.marker([lat, lon]).addTo(map);
+    const marker = L.marker([lat, lon], isLast ? { icon: redIcon } : {}).addTo(map);
 
     marker.bindPopup(`
-      <b>${point.time ?? ""}</b><br/>
+      <b>${formatTime(point.time)}</b><br/>
       ${point.note ?? ""}
     `);
+
+    if (isLast) marker.openPopup();
 
     markers.push(marker);
   });
