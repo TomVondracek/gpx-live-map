@@ -95,6 +95,7 @@ async function loadData() {
     marker.bindPopup(`
       <b>${formatTime(point.time)}</b><br/>
       ${point.note ?? ""}
+      ${point.battery !== null && point.battery !== undefined ? `<br/><small style="color:#888">&#128267; ${point.battery}%</small>` : ""}
     `);
 
     if (isLast) marker.openPopup();
