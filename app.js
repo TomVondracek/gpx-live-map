@@ -290,8 +290,8 @@ async function sendNote() {
 async function directPost(payload) {
   const res = await fetch(SHEET_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    // bez Content-Type → "text/plain" → simple request → žádný CORS preflight
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

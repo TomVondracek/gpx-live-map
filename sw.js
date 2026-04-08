@@ -1,4 +1,4 @@
-const CACHE_NAME = "beh-poznamky-v1";
+const CACHE_NAME = "beh-poznamky-v2";
 const SYNC_TAG = "sync-notes";
 const DB_NAME = "beh-poznamky-db";
 const STORE_NAME = "queue";
@@ -71,8 +71,8 @@ async function flushQueue() {
     try {
       const res = await fetch(record.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(record.payload),
+        // bez Content-Type → "text/plain" → simple request → žádný CORS preflight
       });
 
       if (res.ok) {
