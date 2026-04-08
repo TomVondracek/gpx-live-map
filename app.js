@@ -99,18 +99,17 @@ function initSpeech() {
 
   recognition = new SpeechRecognition();
   recognition.lang = "cs-CZ";
-  recognition.continuous = true;
+  recognition.continuous = false;   // jednorázový režim — žádné duplicity
   recognition.interimResults = true;
 
   recognition.onaudiostart = () => {
-    // Mikrofon skutečně začal přijímat zvuk — bezpečné zobrazit UI
     setRecordingUI(true);
   };
 
   recognition.onresult = (event) => {
     let interim = "";
     let final = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
+    for (let i = 0; i < event.results.length; i++) {
       const t = event.results[i][0].transcript;
       if (event.results[i].isFinal) {
         final += t;
@@ -118,9 +117,10 @@ function initSpeech() {
         interim += t;
       }
     }
-    if (final) currentTranscript += final;
+    // Zobraz pouze výsledky aktuální session — bez akumulace přes restarty
     document.getElementById("transcript").textContent =
-      currentTranscript + interim;
+      currentTranscript + (final || interim);
+    if (final) currentTranscript += final;
   };
 
   recognition.onerror = (event) => {
@@ -135,7 +135,6 @@ function initSpeech() {
         "Přístup k mikrofonu byl zamítnut. Otevři Nastavení Chrome → Oprávnění webu → Mikrofon a povol přístup pro tuto stránku."
       );
     } else if (event.error === "no-speech") {
-      // Žádný zvuk — tiché zastavení, ne chyba
       stopRecording();
     } else {
       showError(`Chyba rozpoznávání: ${event.error}`);
@@ -143,14 +142,10 @@ function initSpeech() {
   };
 
   recognition.onend = () => {
-    // Pokud jsme zastavili ručně (isRecording = false), nic neděláme.
-    // Pokud skončilo samo (Chrome timeout ~60s), restartujeme.
+    // continuous=false: session skončila přirozeně (pauza v řeči)
+    // Zastavíme nahrávání a zobrazíme výsledek
     if (isRecording) {
-      try {
-        recognition.start();
-      } catch {
-        // recognition již běží nebo byla zrušena — ignorujeme
-      }
+      stopRecording();
     }
   };
 
@@ -258,21 +253,28 @@ async function sendNote() {
   };
 
   try {
-    // Nejdřív ulož do fronty
-    await enqueue(payload);
+    // Vždy ulož do fronty jako záloha
+    const id = await enqueue(payload);
 
-    // Pokud online, zkus Background Sync nebo přímý POST
     if (navigator.onLine) {
-      if ("serviceWorker" in navigator && "SyncManager" in window) {
-        const reg = await navigator.serviceWorker.ready;
-        await reg.sync.register(SYNC_TAG);
-      } else {
-        // Fallback: přímý POST
+      try {
+        // Online: odeslat přímo hned
         await directPost(payload);
+        // Úspěch: smaž z fronty (už není potřeba)
+        await deleteFromQueue(id);
+        showSuccess("Odesláno!");
+      } catch (postError) {
+        // POST selhal i při online (timeout, chyba serveru…)
+        // Nech v frontě, BackgroundSync to zkusí znovu
+        scheduleBackgroundSync();
+        showSuccess("Odeslání selhalo, zkusí se znovu automaticky.");
       }
+    } else {
+      // Offline: BackgroundSync odešle až bude signál
+      scheduleBackgroundSync();
+      showSuccess("Offline — odešle se automaticky při signálu.");
     }
 
-    showSuccess(navigator.onLine ? "Odesláno!" : "Uloženo offline, odešle se při signálu.");
     document.getElementById("transcript").textContent = "";
     document.getElementById("section-confirm").classList.add("hidden");
     currentTranscript = "";
@@ -294,10 +296,31 @@ async function directPost(payload) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
+async function deleteFromQueue(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const req = tx.objectStore(STORE_NAME).delete(id);
+    req.onsuccess = resolve;
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
 function discardNote() {
   document.getElementById("transcript").textContent = "";
   document.getElementById("section-confirm").classList.add("hidden");
   currentTranscript = "";
+}
+
+async function scheduleBackgroundSync() {
+  if ("serviceWorker" in navigator && "SyncManager" in window) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.sync.register(SYNC_TAG);
+    } catch {
+      // BackgroundSync nedostupný — nevadí, fronta čeká na příští online event
+    }
+  }
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
@@ -356,11 +379,7 @@ async function init() {
   // Online/offline události
   window.addEventListener("online", async () => {
     await updateStatus();
-    // Zkus odeslat frontu při obnovení spojení
-    if ("serviceWorker" in navigator && "SyncManager" in window) {
-      const reg = await navigator.serviceWorker.ready;
-      await reg.sync.register(SYNC_TAG);
-    }
+    scheduleBackgroundSync();
   });
   window.addEventListener("offline", updateStatus);
 
