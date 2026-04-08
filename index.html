@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Live běh mapa</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    body { margin:0; }
+    #map { height:100vh; }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script>
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbzEQN1cDbhXhyd3MyrSWNav5-_HGXwjcO1gsJaS085TT0FewvaL9Qhv1GrizLg8xjRW/exec";
+
+const map = L.map('map').setView([49.8, 18.27], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+let markers = [];
+
+async function loadData() {
+  const res = await fetch(SHEET_URL);
+  const data = await res.json();
+
+  // vymazat staré markery
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+
+  data.forEach(point => {
+    if (!point.lat || !point.lon) return;
+
+    const marker = L.marker([point.lat, point.lon]).addTo(map);
+
+    marker.bindPopup(`
+      <b>${point.time}</b><br/>
+      ${point.note}
+    `);
+
+    markers.push(marker);
+  });
+}
+
+// první načtení
+loadData();
+
+// refresh každých 30 sekund
+setInterval(loadData, 30000);
+</script>
+
+</body>
+</html>
