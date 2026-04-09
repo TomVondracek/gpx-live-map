@@ -555,11 +555,20 @@ async function sendNote() {
 
   let lat = null;
   let lon = null;
+  let speed = null;
+  let altitude = null;
 
   try {
     const pos = await getPosition();
     lat = pos.coords.latitude;
     lon = pos.coords.longitude;
+    
+    if (pos.coords.speed !== null && pos.coords.speed >= 0) {
+      speed = Math.round(pos.coords.speed * 3.6 * 10) / 10;
+    }
+    if (pos.coords.altitude !== null) {
+      altitude = Math.round(pos.coords.altitude);
+    }
   } catch {
     // GPS nedostupná — odešleme bez souřadnic
     showError("GPS nedostupná — poznámka uložena bez polohy.");
@@ -572,6 +581,8 @@ async function sendNote() {
     lon,
     note,
     battery: batteryLevel,
+    speed,
+    altitude,
   };
 
   try {

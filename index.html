@@ -297,6 +297,52 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 let markers = [];
 let firstFitDone = false;
 let activeNoteIndex = null; // index do validPoints (od nejnovějšího = 0)
+let gpxPoints = []; // for route matching
+
+// ── Počasí a nástroje ───────────────────────────────────────────────────────
+const WEATHER_ICONS = {
+  0: "☀️",
+  1: "🌤️", 2: "⛅", 3: "🌥️",
+  45: "🌫️", 48: "🌫️",
+  51: "🌧️", 53: "🌧️", 55: "🌧️", 56: "🌧️", 57: "🌧️", 61: "🌧️", 63: "🌧️", 65: "🌧️", 66: "🌧️", 67: "🌧️",
+  71: "🌨️", 73: "🌨️", 75: "🌨️", 77: "🌨️",
+  80: "🌦️", 81: "🌦️", 82: "🌦️",
+  95: "⛈️", 96: "⛈️", 99: "⛈️"
+};
+
+function getWeatherEmoji(code) {
+  if (code == null) return "";
+  return WEATHER_ICONS[code] || "🌤️";
+}
+
+function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function findRouteKm(lat, lon) {
+  if (gpxPoints.length === 0) return null;
+  let minDist = Infinity;
+  let bestKm = null;
+  for (let i = 0; i < gpxPoints.length; i++) {
+    const pt = gpxPoints[i];
+    const dist = getDistanceFromLatLonInMeters(lat, lon, pt.lat, pt.lon);
+    if (dist < minDist) {
+      minDist = dist;
+      bestKm = pt.km;
+    }
+  }
+  if (minDist <= 100) {
+    return Math.round(bestKm * 10) / 10;
+  }
+  return null;
+}
 
 // ── GPX trasa ──────────────────────────────────────────────────────────────
 let gpxLayer = new L.GPX(GPX_URL, {
@@ -311,6 +357,34 @@ let gpxLayer = new L.GPX(GPX_URL, {
   if (bounds.isValid()) {
     map.fitBounds(bounds.pad(0.1));
     firstFitDone = true;
+  }
+
+  const layers = e.target.getLayers();
+  let cumulativeDist = 0;
+  let lastPt = null;
+
+  layers.forEach(layer => {
+    if (layer instanceof L.Polyline) {
+      const latlngs = layer.getLatLngs();
+      const flatten = (arr) => {
+        if (arr.length > 0 && Array.isArray(arr[0])) {
+          arr.forEach(flatten);
+        } else if (arr.length > 0) {
+          arr.forEach(ll => {
+            if (lastPt) {
+              cumulativeDist += getDistanceFromLatLonInMeters(lastPt.lat, lastPt.lng, ll.lat, ll.lng);
+            }
+            gpxPoints.push({ lat: ll.lat, lon: ll.lng, km: cumulativeDist / 1000 });
+            lastPt = ll;
+          });
+        }
+      };
+      flatten(latlngs);
+    }
+  });
+
+  if (markers.length > 0) {
+    loadData();
   }
 }).addTo(map);
 
@@ -410,6 +484,35 @@ function renderNotesList(validPoints) {
     item.appendChild(timeEl);
     item.appendChild(textEl);
 
+    // Meta info (speed, alt, weather, km)
+    const metaParts = [];
+    if (point.weather_code != null) {
+      const emoji = getWeatherEmoji(point.weather_code);
+      const temp = point.weather_temp != null ? ` ${Math.round(point.weather_temp)}°C` : "";
+      metaParts.push(`${emoji}${temp}`);
+    }
+    if (point.speed != null) metaParts.push(`⚡ ${point.speed} km/h`);
+    if (point.altitude != null) metaParts.push(`▲ ${point.altitude} m`);
+    
+    // Zjisti km na trase pokud máme gps
+    if (hasGps && gpxPoints.length > 0) {
+      const routeKm = findRouteKm(Number(point.lat), Number(point.lon));
+      if (routeKm != null) {
+        metaParts.push(`📍 km ${routeKm}`);
+      }
+      point._routeKm = routeKm; // ulož pro popup
+    }
+
+    if (metaParts.length > 0) {
+      const metaEl = document.createElement("div");
+      metaEl.className = "note-meta";
+      metaEl.style.fontSize = "0.75rem";
+      metaEl.style.color = "var(--muted)";
+      metaEl.style.marginTop = "6px";
+      metaEl.textContent = metaParts.join("  ·  ");
+      item.appendChild(metaEl);
+    }
+
     if (hasGps) {
       item.addEventListener("click", () => {
         const lat = Number(point.lat);
@@ -501,10 +604,31 @@ async function loadData() {
 
     const marker = L.marker([lat, lon], isLast ? { icon: redIcon } : {}).addTo(map);
 
+    const metaParts = [];
+    if (point.battery != null) metaParts.push(`&#128267; ${point.battery}%`);
+    if (point.speed != null) metaParts.push(`⚡ ${point.speed} km/h`);
+    if (point.altitude != null) metaParts.push(`▲ ${point.altitude} m`);
+    
+    // Upozornění: gpxPoints.length už může být naplněno, 
+    // my ale renderNotesList voláme až *po* tomhle bloku, proto raději
+    // najdeme routeKm znovu tady nebo sjednotíme s polem.
+    const routeKm = findRouteKm(lat, lon);
+    if (routeKm != null) metaParts.push(`📍 km ${routeKm}`);
+
+    let weatherLine = "";
+    if (point.weather_code != null) {
+      const emoji = getWeatherEmoji(point.weather_code);
+      const temp = point.weather_temp != null ? ` ${Math.round(point.weather_temp)}°C` : "";
+      weatherLine = `${emoji}${temp}`;
+    }
+
+    const metaHtml = metaParts.length > 0 ? `<br/><small style="color:#888">${metaParts.join(" &middot; ")}</small>` : "";
+    const weatherHtml = weatherLine ? ` &middot; ${weatherLine}` : "";
+
     marker.bindPopup(`
-      <b>${formatTime(point.time)}</b><br/>
+      <b>${formatTime(point.time)}</b>${weatherHtml}<br/>
       ${point.note ?? ""}
-      ${point.battery !== null && point.battery !== undefined ? `<br/><small style="color:#888">&#128267; ${point.battery}%</small>` : ""}
+      ${metaHtml}
     `);
 
     if (isLast) marker.openPopup();

@@ -39,7 +39,7 @@ Runner's Android phone (Capacitor native app)
 
 **v2 – Native Android + Vosk (offline-only STT):** Capacitor wraps the web UI into a native Android APK. Speech recognition uses Vosk with a bundled Czech model (~40 MB). Service Worker replaced by in-app IndexedDB queue + Capacitor Network listener.
 
-**v3 – Hybrid STT (current):** Added Google STT (Android `SpeechRecognizer` API, cs-CZ) as the primary online engine. Vosk remains the offline fallback. STT sessions auto-restart on silence so pausing mid-sentence does not stop recording.
+**v3 – Hybrid STT & Telemetry (current):** Added Google STT (Android `SpeechRecognizer` API, cs-CZ) as the primary online engine. Vosk remains the offline fallback. Added real-time telemetry (speed, altitude) sent with notes. GPX route matching and weather fetching (via OpenMeteo) are handled automatically for map observers.
 
 ---
 
@@ -140,7 +140,9 @@ Vosk silence timeout: **6 seconds**. Google STT silence hint: **6000 ms** (serve
   "lat": 49.7892,
   "lon": 18.27,
   "note": "krize ale držím tempo",
-  "battery": 85
+  "battery": 85,
+  "speed": 10.5,
+  "altitude": 320
 }
 ```
 
@@ -224,9 +226,10 @@ Vosk silence timeout: **6 seconds**. Google STT silence hint: **6000 ms** (serve
 - Note markers fetched from Google Apps Script every 10 seconds
 - Latest position highlighted with red marker, popup opened automatically
 - Czech locale timestamps (`cs-CZ`, `Europe/Prague`)
+- **Telemetry & Weather:** Popups and panel items enrich notes with calculated route position (km), movement speed (km/h), altitude (m), and weather info at the time (emoji + °C).
 - **Notes panel** — right-side panel (desktop) or slide-up drawer (mobile):
   - Shows all notes sorted newest-first
-  - Each row: compact timestamp + note text
+  - Each row: compact timestamp + note text + mini-telemetry row (e.g. `☀️ 18°C · ⚡ 10.5 km/h · ▲ 312 m · 📍 km 12.3`)
   - Click on a row → `map.setView([lat, lon], 15)` + opens marker popup
   - Active row highlighted with green left border
   - Notes without GPS shown dimmed (no map interaction)
@@ -245,8 +248,8 @@ Vosk silence timeout: **6 seconds**. Google STT silence hint: **6000 ms** (serve
 
 **Functions:**
 
-- `doPost(e)` — Parses JSON body, appends row `[time, lat, lon, note, battery]` to Google Sheet
-- `doGet()` — Returns all rows as JSON array
+- `doPost(e)` — Parses JSON body, optionally fetches current weather from OpenMeteo API, and appends row `[time, lat, lon, note, battery, speed, altitude, weather_temp, weather_code]` to Google Sheet
+- `doGet()` — Returns all rows as JSON array with fully parsed floats/integers
 
 **No Content-Type header** in POST requests — intentional. Sends as `text/plain` to avoid CORS preflight. This is a critical invariant (see below).
 
@@ -264,7 +267,7 @@ Vosk silence timeout: **6 seconds**. Google STT silence hint: **6000 ms** (serve
 {
   "id": "1712612345678-a3bx7",
   "url": "https://script.google.com/macros/s/.../exec",
-  "payload": { "time": "...", "lat": ..., "lon": ..., "note": "...", "battery": ... },
+  "payload": { "time": "...", "lat": ..., "lon": ..., "note": "...", "battery": ..., "speed": ..., "altitude": ... },
   "createdAt": "2026-04-08T14:53:00.000Z"
 }
 ```
@@ -414,10 +417,9 @@ Building inside Android Studio (which bundles its own JBR with proper certificat
 
 ### Medium Priority
 
-4. **GPX-based kilometer matching** — auto-tag notes with approximate kilometer on the route
-5. **Note categorization** — predefined categories (energy, pain, navigation, etc.)
-6. **Current position indicator** — highlight runner's last known position on the live map
-7. **Camera integration** — capture and attach a photo to a note, display in map panel
+4. **Note categorization** — predefined categories (energy, pain, navigation, etc.)
+5. **Current position indicator** — highlight runner's last known position on the live map
+6. **Camera integration** — capture and attach a photo to a note, display in map panel
 
 ### Advanced
 
