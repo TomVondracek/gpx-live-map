@@ -1,6 +1,10 @@
 // ── Konfigurace ───────────────────────────────────────────────────────────────
+const APP_CONFIG = (typeof window !== "undefined" && window.RUN_NOTES_CONFIG) || {};
 const SHEET_URL =
+  APP_CONFIG.sheetUrl ||
   "https://script.google.com/macros/s/AKfycbxZli-8aEpEKd6rV8pzFsC73EDI3h-dNIOmBBj4T967HKWxaL-a431b6C21QBOJpEWr/exec";
+const WRITE_TOKEN = APP_CONFIG.writeToken || APP_CONFIG.apiToken || "";
+const READ_TOKEN = APP_CONFIG.readToken || APP_CONFIG.mapToken || "";
 
 const DB_NAME = "beh-poznamky-db";
 const STORE_NAME = "queue";
@@ -26,6 +30,75 @@ let isFlushing = false;
 let googleSttAvailable = false;  // zda je Google STT k dispozici na zařízení
 let activeEngine = null;          // "google" | "vosk" | null — který engine právě nahrává
 let userStoppedRecording = false; // true = uživatel stiskl STOP → neprovádět auto-restart
+
+function normalizeTranscriptWhitespace(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sanitizeOfflineTranscript(text) {
+  return String(text || "")
+    .replace(/\s*\[unk\]\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uppercaseFirstLetter(text) {
+  const chars = Array.from(text);
+  for (let i = 0; i < chars.length; i++) {
+    if (/\p{L}/u.test(chars[i])) {
+      chars[i] = chars[i].toLocaleUpperCase("cs-CZ");
+      break;
+    }
+  }
+  return chars.join("");
+}
+
+function formatFinalSegment(text, options = {}) {
+  let formatted = options.filterUnknownTokens
+    ? sanitizeOfflineTranscript(text)
+    : normalizeTranscriptWhitespace(text);
+  if (!formatted) return "";
+
+  formatted = uppercaseFirstLetter(formatted);
+
+  // Pokud Google STT už vrátí interpunkci, zachováme ji.
+  if (!/[.!?:…]$/.test(formatted)) {
+    formatted += ".";
+  }
+
+  return formatted;
+}
+
+function formatPartialSegment(text, options = {}) {
+  let formatted = options.filterUnknownTokens
+    ? sanitizeOfflineTranscript(text)
+    : normalizeTranscriptWhitespace(text);
+  if (!formatted) return "";
+
+  if (!currentTranscript || /[.!?…]\s*$/.test(currentTranscript)) {
+    formatted = uppercaseFirstLetter(formatted);
+  }
+
+  return formatted;
+}
+
+function renderTranscriptWithPartial(partialText = "", options = {}) {
+  const partial = formatPartialSegment(partialText, options);
+  document.getElementById("transcript").value =
+    currentTranscript + (currentTranscript && partial ? " " : "") + partial;
+  autoResize();
+}
+
+function appendFinalTranscriptSegment(text, options = {}) {
+  const formatted = formatFinalSegment(text, options);
+  if (!formatted) return;
+
+  currentTranscript += (currentTranscript ? " " : "") + formatted;
+  document.getElementById("transcript").value = currentTranscript;
+  autoResize();
+}
 
 // ── IndexedDB ─────────────────────────────────────────────────────────────────
 function openDB() {
@@ -182,17 +255,14 @@ async function flushQueue() {
 
     for (const record of records) {
       try {
-        const res = await fetch(record.url, {
-          method: "POST",
-          body: JSON.stringify(record.payload),
-          // bez Content-Type → "text/plain" → simple request → žádný CORS preflight
-        });
-
-        if (res.ok) {
-          await deleteFromQueue(record.id);
-          console.log(`Odesláno z fronty: ${record.id}`);
+        await directPost(record.payload, record.url);
+        await deleteFromQueue(record.id);
+        console.log(`Odesláno z fronty: ${record.id}`);
+      } catch (error) {
+        if (error && (error.code === "UNAUTHORIZED" || error.code === "CONFIG")) {
+          console.log("Flush queue: neplatná autorizace, frontu ponechávám beze změny");
+          break;
         }
-      } catch {
         // Síť stále nedostupná — přestat, zkusíme znovu příště
         console.log("Flush queue: síť nedostupná, zkusíme později");
         break;
@@ -231,17 +301,9 @@ async function initGoogleSTT() {
     if (activeEngine !== "google") return;
 
     if (event.isFinal) {
-      const text = event.text || "";
-      if (text) {
-        currentTranscript += (currentTranscript ? " " : "") + text;
-        document.getElementById("transcript").value = currentTranscript;
-        autoResize();
-      }
+      appendFinalTranscriptSegment(event.text || "");
     } else {
-      const partial = event.text || "";
-      document.getElementById("transcript").value =
-        currentTranscript + (currentTranscript && partial ? " " : "") + partial;
-      autoResize();
+      renderTranscriptWithPartial(event.text || "");
     }
   });
 
@@ -297,17 +359,9 @@ async function initVosk() {
     if (activeEngine !== "vosk") return;
 
     if (event.isFinal) {
-      const text = event.text || "";
-      if (text) {
-        currentTranscript += (currentTranscript ? " " : "") + text;
-        document.getElementById("transcript").value = currentTranscript;
-        autoResize();
-      }
+      appendFinalTranscriptSegment(event.text || "", { filterUnknownTokens: true });
     } else {
-      const partial = event.text || "";
-      document.getElementById("transcript").value =
-        currentTranscript + (currentTranscript && partial ? " " : "") + partial;
-      autoResize();
+      renderTranscriptWithPartial(event.text || "", { filterUnknownTokens: true });
     }
   });
 
@@ -547,6 +601,11 @@ async function sendNote() {
   const note = document.getElementById("transcript").value.trim();
   if (!note) return;
 
+  if (!WRITE_TOKEN) {
+    showError("Chybí write token v runtime-config.js.");
+    return;
+  }
+
   document.getElementById("btn-send").disabled = true;
   document.getElementById("btn-send").textContent = "Odesílám…";
 
@@ -592,6 +651,9 @@ async function sendNote() {
         await directPost(payload);
         showSuccess("Odesláno!");
       } catch (postError) {
+        if (postError && (postError.code === "UNAUTHORIZED" || postError.code === "CONFIG")) {
+          throw postError;
+        }
         console.log("Přímé odeslání selhalo, ukládám do fronty:", postError);
         await enqueue(payload);
         showSuccess("Odeslání selhalo, zkusí se znovu automaticky.");
@@ -615,13 +677,40 @@ async function sendNote() {
   }
 }
 
-async function directPost(payload) {
-  const res = await fetch(SHEET_URL, {
+async function directPost(payload, url = SHEET_URL) {
+  if (!WRITE_TOKEN) {
+    const error = new Error("Chybí write token v runtime-config.js.");
+    error.code = "CONFIG";
+    throw error;
+  }
+
+  const res = await fetch(url, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      token: WRITE_TOKEN,
+    }),
     // bez Content-Type → "text/plain" → simple request → žádný CORS preflight
   });
+
+  const text = await res.text();
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  if (!text) return;
+
+  try {
+    const data = JSON.parse(text);
+    if (data && data.ok === false) {
+      const error = new Error(data.error || "Neautorizovaný požadavek.");
+      error.code = data.error === "unauthorized" ? "UNAUTHORIZED" : "API";
+      throw error;
+    }
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      return;
+    }
+    throw e;
+  }
 }
 
 function discardNote() {
@@ -653,6 +742,19 @@ function showSuccess(msg) {
   setTimeout(() => el.classList.add("hidden"), 3000);
 }
 
+function configureMapLink() {
+  const link = document.querySelector('footer a[href="./index.html"], footer a[href="./map.html"]');
+  if (!link) return;
+
+  if (!READ_TOKEN) {
+    return;
+  }
+
+  const href = link.getAttribute("href") || "./index.html";
+  const baseHref = href.split("#")[0];
+  link.setAttribute("href", `${baseHref}#token=${encodeURIComponent(READ_TOKEN)}`);
+}
+
 async function updateStatus() {
   const queueCount = await getQueueCount();
   const onlineText = isOnline ? "Online" : "Offline";
@@ -674,6 +776,7 @@ async function init() {
   await initBattery();
   await initSpeech();
   await updateStatus();
+  configureMapLink();
 
   // Pokus o flush fronty při startu (pokud jsme online)
   if (isOnline) {

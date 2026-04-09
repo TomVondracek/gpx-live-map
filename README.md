@@ -238,6 +238,8 @@ Vosk silence timeout: **6 seconds**. Google STT silence hint: **6000 ms** (serve
 
 **Dependencies (CDN):** Leaflet.js, leaflet-gpx, leaflet-color-markers.
 
+**Access protection:** The observer map no longer contains a hardcoded read credential. To load notes, open the map with a token in the URL hash, for example `map.html#token=YOUR_READ_TOKEN`. The page stores the token locally and removes it from the visible URL.
+
 ---
 
 ### 5. Backend (`appscript.js`)
@@ -248,10 +250,34 @@ Vosk silence timeout: **6 seconds**. Google STT silence hint: **6000 ms** (serve
 
 **Functions:**
 
-- `doPost(e)` — Parses JSON body, optionally fetches current weather from OpenMeteo API, and appends row `[time, lat, lon, note, battery, speed, altitude, weather_temp, weather_code]` to Google Sheet
-- `doGet()` — Returns all rows as JSON array with fully parsed floats/integers
+- `doPost(e)` — Parses JSON body, verifies write token, optionally fetches current weather from OpenMeteo API, and appends row `[time, lat, lon, note, battery, speed, altitude, weather_temp, weather_code]` to Google Sheet
+- `doGet(e)` — Verifies read token and returns all rows as JSON array with fully parsed floats/integers
 
 **No Content-Type header** in POST requests — intentional. Sends as `text/plain` to avoid CORS preflight. This is a critical invariant (see below).
+
+### Security setup
+
+#### 1. Runtime config for the runner app
+
+Create a local `runtime-config.js` in the project root (gitignored) based on `runtime-config.example.js`:
+
+```js
+window.RUN_NOTES_CONFIG = {
+  sheetUrl: "https://script.google.com/macros/s/AKfycbx.../exec",
+  writeToken: "replace-with-strong-write-token"
+};
+```
+
+`npm run build` copies this file into `www/runtime-config.js` for the Capacitor app.
+
+#### 2. Script Properties in Google Apps Script
+
+In the Apps Script editor, set these Script Properties:
+
+- `WRITE_TOKEN` for note uploads from the mobile app
+- `READ_TOKEN` for observer map access
+
+You can also set a single fallback `API_TOKEN`, but separate read/write tokens are recommended.
 
 ---
 

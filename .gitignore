@@ -58,6 +58,7 @@ out/
 .env
 .env.local
 .env.*.local
+runtime-config.js
 
 # npm cache directory
 .npm

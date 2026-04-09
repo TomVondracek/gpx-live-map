@@ -48,6 +48,32 @@
       z-index: 1;
     }
 
+    #map-back {
+      position: fixed;
+      top: max(16px, env(safe-area-inset-top, 0px) + 8px);
+      left: 16px;
+      z-index: 250;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: rgba(15, 15, 26, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #map-back:active {
+      transform: scale(0.97);
+    }
+
     /* ── Panel zpráv – desktop ── */
     #notes-panel {
       width: var(--panel-w);
@@ -266,6 +292,7 @@
 <body>
 
 <div id="map"></div>
+<button id="map-back" type="button" aria-label="Vrátit se na hlavní obrazovku">← Zpět</button>
 
 <!-- Panel zpráv -->
 <div id="notes-panel">
@@ -287,6 +314,7 @@
 <script>
 const SHEET_URL = "https://script.google.com/macros/s/AKfycbxZli-8aEpEKd6rV8pzFsC73EDI3h-dNIOmBBj4T967HKWxaL-a431b6C21QBOJpEWr/exec";
 const GPX_URL = "./trasa.gpx";
+const MAP_TOKEN_STORAGE_KEY = "beh-poznamky-map-token";
 
 const map = L.map('map').setView([49.8, 18.27], 13);
 
@@ -296,8 +324,91 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 let markers = [];
 let firstFitDone = false;
-let activeNoteIndex = null; // index do validPoints (od nejnovějšího = 0)
 let gpxPoints = []; // for route matching
+let activePointKey = null;
+let hasShownInitialLatestPopup = false;
+let isRefreshingMarkers = false;
+
+function readTokenFromLocation() {
+  const queryToken = new URLSearchParams(window.location.search).get("token");
+  const rawHash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+  const hashToken = new URLSearchParams(rawHash).get("token");
+  return hashToken || queryToken || "";
+}
+
+function storeMapToken(token) {
+  if (!token) return;
+  try {
+    localStorage.setItem(MAP_TOKEN_STORAGE_KEY, token);
+  } catch {
+    // localStorage nemusí být dostupné
+  }
+}
+
+function readStoredMapToken() {
+  try {
+    return localStorage.getItem(MAP_TOKEN_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function clearTokenFromUrl() {
+  const url = new URL(window.location.href);
+  let changed = false;
+
+  if (url.searchParams.has("token")) {
+    url.searchParams.delete("token");
+    changed = true;
+  }
+
+  const rawHash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  if (rawHash) {
+    const hashParams = new URLSearchParams(rawHash);
+    if (hashParams.has("token")) {
+      hashParams.delete("token");
+      url.hash = hashParams.toString() ? `#${hashParams.toString()}` : "";
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    window.history.replaceState({}, document.title, url.toString());
+  }
+}
+
+function getMapToken() {
+  const urlToken = readTokenFromLocation();
+  if (urlToken) {
+    storeMapToken(urlToken);
+    clearTokenFromUrl();
+    return urlToken;
+  }
+  return readStoredMapToken();
+}
+
+function getSheetDataUrl() {
+  const token = getMapToken();
+  if (!token) return null;
+
+  const url = new URL(SHEET_URL);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+
+function setNotesStatus(message) {
+  const empty = document.getElementById("notes-empty");
+  const countBadge = document.getElementById("notes-count");
+  const fabCount = document.getElementById("fab-count");
+  const list = document.getElementById("notes-list");
+
+  empty.innerHTML = "";
+  empty.textContent = message;
+  empty.style.display = "block";
+  countBadge.textContent = "0";
+  fabCount.textContent = "0";
+  Array.from(list.querySelectorAll(".note-item")).forEach(el => el.remove());
+}
 
 // ── Počasí a nástroje ───────────────────────────────────────────────────────
 const WEATHER_ICONS = {
@@ -426,6 +537,50 @@ function formatTimeShort(raw) {
   });
 }
 
+function getPointKey(point) {
+  return [
+    point.time ?? "",
+    point.lat ?? "",
+    point.lon ?? "",
+    point.note ?? ""
+  ].join("|");
+}
+
+function syncActiveNoteUI() {
+  document.querySelectorAll(".note-item").forEach((el) => {
+    el.classList.toggle("active", el.dataset.pointKey === activePointKey);
+  });
+}
+
+function buildPopupContent(point, weatherLine, metaParts) {
+  const wrapper = document.createElement("div");
+  const title = document.createElement("b");
+  title.textContent = formatTime(point.time);
+  wrapper.appendChild(title);
+
+  if (weatherLine) {
+    const weather = document.createElement("span");
+    weather.textContent = ` · ${weatherLine}`;
+    wrapper.appendChild(weather);
+  }
+
+  wrapper.appendChild(document.createElement("br"));
+
+  const note = document.createElement("div");
+  note.textContent = point.note ?? "";
+  wrapper.appendChild(note);
+
+  if (metaParts.length > 0) {
+    wrapper.appendChild(document.createElement("br"));
+    const meta = document.createElement("small");
+    meta.style.color = "#888";
+    meta.textContent = metaParts.join(" · ");
+    wrapper.appendChild(meta);
+  }
+
+  return wrapper;
+}
+
 // ── Panel zpráv ─────────────────────────────────────────────────────────────
 
 // Detekce, zda uživatel scrolloval ručně (pak nepřeskakujeme na nové zprávy)
@@ -467,10 +622,12 @@ function renderNotesList(validPoints) {
     // originalIndex v markers[] = validPoints.length - 1 - reversedIndex
     const originalIndex = validPoints.length - 1 - reversedIndex;
     const hasGps = point.lat !== null && point.lat !== "" && point.lon !== null && point.lon !== "";
+    const pointKey = getPointKey(point);
 
     const item = document.createElement("div");
     item.className = "note-item" + (hasGps ? "" : " no-gps");
-    if (activeNoteIndex === reversedIndex) item.classList.add("active");
+    item.dataset.pointKey = pointKey;
+    if (activePointKey === pointKey) item.classList.add("active");
 
     const timeEl = document.createElement("div");
     timeEl.className = "note-time";
@@ -517,12 +674,8 @@ function renderNotesList(validPoints) {
       item.addEventListener("click", () => {
         const lat = Number(point.lat);
         const lon = Number(point.lon);
-
-        // Aktualizuj active stav
-        activeNoteIndex = reversedIndex;
-        list.querySelectorAll(".note-item").forEach((el, i) => {
-          el.classList.toggle("active", i === reversedIndex);
-        });
+        activePointKey = pointKey;
+        syncActiveNoteUI();
 
         // Vycentruj mapu a otevři popup
         map.setView([lat, lon], 15, { animate: true });
@@ -551,6 +704,23 @@ function renderNotesList(validPoints) {
 const panel = document.getElementById("notes-panel");
 const fab = document.getElementById("notes-fab");
 const closeBtn = document.getElementById("notes-close");
+const backBtn = document.getElementById("map-back");
+
+function getMainScreenUrl() {
+  const path = window.location.pathname || "";
+  return path.endsWith("/map.html") || path.endsWith("\\map.html")
+    ? "./index.html"
+    : "./app.html";
+}
+
+function goBackToMainScreen() {
+  const sameOriginReferrer = document.referrer && document.referrer.startsWith(window.location.origin);
+  if (sameOriginReferrer && window.history.length > 1) {
+    window.history.back();
+    return;
+  }
+  window.location.href = getMainScreenUrl();
+}
 
 function openMobilePanel() {
   panel.classList.add("open");
@@ -571,6 +741,7 @@ function toggleMobilePanel() {
 
 fab.addEventListener("click", toggleMobilePanel);
 closeBtn.addEventListener("click", closeMobilePanel);
+backBtn.addEventListener("click", goBackToMainScreen);
 
 // Klik na mapu zavře mobilní panel
 map.on("click", () => {
@@ -581,72 +752,104 @@ map.on("click", () => {
 
 // ── Načítání dat ─────────────────────────────────────────────────────────────
 async function loadData() {
-  const res = await fetch(SHEET_URL, { cache: "no-store" });
-  const data = await res.json();
-
-  markers.forEach(m => map.removeLayer(m));
-  markers = [];
-
-  const validPoints = data.filter(point =>
-    point &&
-    point.lat !== null &&
-    point.lon !== null &&
-    point.lat !== "" &&
-    point.lon !== "" &&
-    !Number.isNaN(Number(point.lat)) &&
-    !Number.isNaN(Number(point.lon))
-  );
-
-  validPoints.forEach((point, index) => {
-    const isLast = index === validPoints.length - 1;
-    const lat = Number(point.lat);
-    const lon = Number(point.lon);
-
-    const marker = L.marker([lat, lon], isLast ? { icon: redIcon } : {}).addTo(map);
-
-    const metaParts = [];
-    if (point.battery != null) metaParts.push(`&#128267; ${point.battery}%`);
-    if (point.speed != null) metaParts.push(`⚡ ${point.speed} km/h`);
-    if (point.altitude != null) metaParts.push(`▲ ${point.altitude} m`);
-    
-    // Upozornění: gpxPoints.length už může být naplněno, 
-    // my ale renderNotesList voláme až *po* tomhle bloku, proto raději
-    // najdeme routeKm znovu tady nebo sjednotíme s polem.
-    const routeKm = findRouteKm(lat, lon);
-    if (routeKm != null) metaParts.push(`📍 km ${routeKm}`);
-
-    let weatherLine = "";
-    if (point.weather_code != null) {
-      const emoji = getWeatherEmoji(point.weather_code);
-      const temp = point.weather_temp != null ? ` ${Math.round(point.weather_temp)}°C` : "";
-      weatherLine = `${emoji}${temp}`;
+  isRefreshingMarkers = true;
+  try {
+    const dataUrl = getSheetDataUrl();
+    if (!dataUrl) {
+      setNotesStatus("Chybí přístupový token. Otevři mapu s #token=... v URL.");
+      return;
     }
 
-    const metaHtml = metaParts.length > 0 ? `<br/><small style="color:#888">${metaParts.join(" &middot; ")}</small>` : "";
-    const weatherHtml = weatherLine ? ` &middot; ${weatherLine}` : "";
-
-    marker.bindPopup(`
-      <b>${formatTime(point.time)}</b>${weatherHtml}<br/>
-      ${point.note ?? ""}
-      ${metaHtml}
-    `);
-
-    if (isLast) marker.openPopup();
-
-    markers.push(marker);
-  });
-
-  if (validPoints.length > 0 && !firstFitDone) {
-    const bounds = L.latLngBounds(validPoints.map(p => [Number(p.lat), Number(p.lon)]));
-    if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.2));
-      firstFitDone = true;
+    const res = await fetch(dataUrl, { cache: "no-store" });
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error(data && data.error ? data.error : "Neplatná odpověď serveru.");
     }
+
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    const validPoints = data.filter(point =>
+      point &&
+      point.lat !== null &&
+      point.lon !== null &&
+      point.lat !== "" &&
+      point.lon !== "" &&
+      !Number.isNaN(Number(point.lat)) &&
+      !Number.isNaN(Number(point.lon))
+    );
+
+    validPoints.forEach((point, index) => {
+      const isLast = index === validPoints.length - 1;
+      const lat = Number(point.lat);
+      const lon = Number(point.lon);
+      const pointKey = getPointKey(point);
+
+      const marker = L.marker([lat, lon], isLast ? { icon: redIcon } : {}).addTo(map);
+
+      const metaParts = [];
+      if (point.battery != null) metaParts.push(`&#128267; ${point.battery}%`);
+      if (point.speed != null) metaParts.push(`⚡ ${point.speed} km/h`);
+      if (point.altitude != null) metaParts.push(`▲ ${point.altitude} m`);
+      
+      // Upozornění: gpxPoints.length už může být naplněno, 
+      // my ale renderNotesList voláme až *po* tomhle bloku, proto raději
+      // najdeme routeKm znovu tady nebo sjednotíme s polem.
+      const routeKm = findRouteKm(lat, lon);
+      if (routeKm != null) metaParts.push(`📍 km ${routeKm}`);
+
+      let weatherLine = "";
+      if (point.weather_code != null) {
+        const emoji = getWeatherEmoji(point.weather_code);
+        const temp = point.weather_temp != null ? ` ${Math.round(point.weather_temp)}°C` : "";
+        weatherLine = `${emoji}${temp}`;
+      }
+
+      marker.bindPopup(buildPopupContent(point, weatherLine, metaParts));
+      marker._pointKey = pointKey;
+      marker.on("popupopen", () => {
+        activePointKey = pointKey;
+        syncActiveNoteUI();
+      });
+      marker.on("popupclose", () => {
+        if (!isRefreshingMarkers && activePointKey === pointKey) {
+          activePointKey = null;
+          syncActiveNoteUI();
+        }
+      });
+
+      markers.push(marker);
+    });
+
+    if (validPoints.length > 0 && !firstFitDone) {
+      const bounds = L.latLngBounds(validPoints.map(p => [Number(p.lat), Number(p.lon)]));
+      if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.2));
+        firstFitDone = true;
+      }
+    }
+
+    if (!hasShownInitialLatestPopup && validPoints.length > 0) {
+      activePointKey = getPointKey(validPoints[validPoints.length - 1]);
+      hasShownInitialLatestPopup = true;
+    }
+
+    if (activePointKey) {
+      const activeMarker = markers.find(marker => marker._pointKey === activePointKey);
+      if (activeMarker) {
+        activeMarker.openPopup();
+      }
+    }
+
+    // Aktualizuj seznam zpráv (všechny body, ne jen ty s GPS)
+    const allPoints = data.filter(p => p != null);
+    renderNotesList(allPoints);
+  } catch (error) {
+    console.error("Načtení mapových dat selhalo:", error);
+    setNotesStatus("Nepodařilo se načíst poznámky. Zkontroluj přístupový token.");
+  } finally {
+    isRefreshingMarkers = false;
   }
-
-  // Aktualizuj seznam zpráv (všechny body, ne jen ty s GPS)
-  const allPoints = data.filter(p => p != null);
-  renderNotesList(allPoints);
 }
 
 loadData();

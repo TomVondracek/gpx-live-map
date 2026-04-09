@@ -11,6 +11,7 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
 const WWW = path.join(ROOT, "www");
+const DEFAULT_RUNTIME_CONFIG = "window.RUN_NOTES_CONFIG = window.RUN_NOTES_CONFIG || {};\n";
 
 // Zajisti existenci www/
 if (!fs.existsSync(WWW)) {
@@ -35,6 +36,17 @@ const appJs = path.join(ROOT, "app.js");
 if (fs.existsSync(appJs)) {
   fs.copyFileSync(appJs, path.join(WWW, "app.js"));
   console.log("  app.js -> www/app.js");
+}
+
+// runtime-config.js → www/runtime-config.js (lokální runtime konfigurace, pokud existuje)
+const runtimeConfig = path.join(ROOT, "runtime-config.js");
+const runtimeConfigTarget = path.join(WWW, "runtime-config.js");
+if (fs.existsSync(runtimeConfig)) {
+  fs.copyFileSync(runtimeConfig, runtimeConfigTarget);
+  console.log("  runtime-config.js -> www/runtime-config.js");
+} else {
+  fs.writeFileSync(runtimeConfigTarget, DEFAULT_RUNTIME_CONFIG, "utf-8");
+  console.log("  generated www/runtime-config.js (empty default config)");
 }
 
 // index.html → www/map.html (mapa — přístupná přes odkaz v appce)

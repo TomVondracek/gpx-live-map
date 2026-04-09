@@ -2,6 +2,7 @@ package cz.behpoznamky.app.googlestt;
 
 import android.Manifest;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
@@ -90,6 +91,14 @@ public class GoogleSTTPlugin extends Plugin {
                 intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, LANGUAGE);
                 intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
                 intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+                // Na novějších verzích Androidu zkus zapnout nativní interpunkci
+                // a kapitalizaci od Google rozpoznávače. Pokud zařízení extra nepodporuje,
+                // SpeechRecognizer je prostě ignoruje.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.putExtra(RecognizerIntent.EXTRA_ENABLE_FORMATTING,
+                        RecognizerIntent.FORMATTING_OPTIMIZE_LATENCY);
+                    intent.putExtra(RecognizerIntent.EXTRA_HIDE_PARTIAL_TRAILING_PUNCTUATION, true);
+                }
                 // Prodloužené silence timeouty — prostor pro pomlky při diktování
                 // Poznámka: Android tyto hodnoty bere jako hinty, skutečné chování závisí na Google STT serveru
                 intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 6000L);
