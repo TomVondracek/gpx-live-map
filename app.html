@@ -34,6 +34,49 @@
       padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
 
+    #desktop-notice {
+      display: none;
+      min-height: 100dvh;
+      padding: 32px 24px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #desktop-card {
+      width: min(520px, 100%);
+      background: rgba(15, 15, 26, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px 24px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      text-align: center;
+    }
+
+    #desktop-card h1 {
+      font-size: 1.35rem;
+      margin-bottom: 12px;
+    }
+
+    #desktop-card p {
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+
+    #desktop-card a {
+      color: var(--text);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 10px 18px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
     /* ── Status bar ── */
     #status-bar {
       background: rgba(15, 15, 26, 0.85);
@@ -362,9 +405,29 @@
     footer a:hover, footer a:focus {
       opacity: 1;
     }
+
+    @media (min-width: 769px) {
+      #status-bar,
+      main,
+      footer {
+        display: none;
+      }
+
+      #desktop-notice {
+        display: flex;
+      }
+    }
   </style>
 </head>
 <body>
+
+  <section id="desktop-notice" aria-label="Desktop upozornění">
+    <div id="desktop-card">
+      <h1>Tahle stránka je určená pro mobil</h1>
+      <p>Diktování a odesílání poznámek dává smysl jen v telefonu při běhu. Na desktopu použijte raději živou mapu.</p>
+      <a href="./index.html">Otevřít mapu</a>
+    </div>
+  </section>
 
   <div id="status-bar">
     <span id="status-dot"></span>

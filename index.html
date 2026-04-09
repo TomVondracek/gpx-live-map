@@ -49,25 +49,26 @@
     }
 
     #map-back {
+      display: none;
       position: fixed;
-      top: max(16px, env(safe-area-inset-top, 0px) + 8px);
+      bottom: 24px;
       left: 16px;
-      z-index: 250;
-      display: inline-flex;
+      z-index: 100;
       align-items: center;
       gap: 8px;
       border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 10px 14px;
+      border-radius: 28px;
+      padding: 10px 18px;
       background: rgba(15, 15, 26, 0.92);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       color: var(--text);
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-weight: 600;
       cursor: pointer;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
       -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, transform 0.1s;
     }
 
     #map-back:active {
@@ -261,6 +262,11 @@
 
       #notes-fab {
         display: flex;
+        align-items: center;
+      }
+
+      #map-back {
+        display: inline-flex;
         align-items: center;
       }
 
@@ -788,7 +794,7 @@ async function loadData() {
       const marker = L.marker([lat, lon], isLast ? { icon: redIcon } : {}).addTo(map);
 
       const metaParts = [];
-      if (point.battery != null) metaParts.push(`&#128267; ${point.battery}%`);
+      if (point.battery != null) metaParts.push(`🔋 ${point.battery}%`);
       if (point.speed != null) metaParts.push(`⚡ ${point.speed} km/h`);
       if (point.altitude != null) metaParts.push(`▲ ${point.altitude} m`);
       

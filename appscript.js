@@ -32,6 +32,16 @@ function isAuthorized_(providedToken, mode) {
   return secureEquals_(String(providedToken), expectedToken);
 }
 
+function neutralizeSpreadsheetFormula_(value) {
+  if (value == null) return "";
+
+  const text = String(value);
+  if (/^[=+\-@]/.test(text)) {
+    return "'" + text;
+  }
+  return text;
+}
+
 function doPost(e) {
   try {
     const data = JSON.parse((e && e.postData && e.postData.contents) || "{}");
@@ -63,7 +73,7 @@ function doPost(e) {
       data.time,
       data.lat,
       data.lon,
-      data.note,
+      neutralizeSpreadsheetFormula_(data.note),
       data.battery ?? "",
       data.speed ?? "",
       data.altitude ?? "",
