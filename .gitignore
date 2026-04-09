@@ -2,6 +2,32 @@
 # Dependencies
 node_modules/
 
+### IDE metadata
+# Android Studio / IntelliJ
+.idea/
+*.iml
+# Eclipse Buildship (generovaný LSP / opencode)
+.project
+.classpath
+.settings/
+# Android Studio – local config
+android/local.properties
+
+### Capacitor / Android
+# Generated web assets directory (copied from root by scripts/copy-www.js)
+www/
+# Gradle build output (keep android/ source in git, ignore build artifacts)
+android/app/build/
+android/.gradle/
+android/build/
+android/capacitor-cordova-android-plugins/build/
+android/app/src/main/assets/capacitorassets/
+# Vosk model (too large for git — download separately)
+android/app/src/main/assets/models/
+*.apk
+*.aab
+local.properties
+
 # Logs
 *.log
 

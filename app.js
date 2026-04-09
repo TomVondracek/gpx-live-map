@@ -4,17 +4,28 @@ const SHEET_URL =
 
 const DB_NAME = "beh-poznamky-db";
 const STORE_NAME = "queue";
-const SYNC_TAG = "sync-notes";
-const SPEECH_LANG = "cs-CZ";
+
+// ── Capacitor Plugins ─────────────────────────────────────────────────────────
+// V Capacitor WebView jsou pluginy dostupné přes globální Capacitor.Plugins
+// Nepoužíváme ES modules / import, protože nemáme bundler.
+function getCapacitorPlugin(name) {
+  if (typeof Capacitor !== "undefined" && Capacitor.Plugins) {
+    return Capacitor.Plugins[name] || null;
+  }
+  return null;
+}
 
 // ── Stav aplikace ────────────────────────────────────────────────────────────
-let recognition = null;
 let isRecording = false;
 let currentTranscript = "";
 let batteryLevel = null;
-let speechRecognitionCtor = null;
-let speechMode = "unavailable";
-let onDeviceAvailability = "unknown";
+let isOnline = true;
+let voskReady = false;
+let voskLoading = false;
+let isFlushing = false;
+let googleSttAvailable = false;  // zda je Google STT k dispozici na zařízení
+let activeEngine = null;          // "google" | "vosk" | null — který engine právě nahrává
+let userStoppedRecording = false; // true = uživatel stiskl STOP → neprovádět auto-restart
 
 // ── IndexedDB ─────────────────────────────────────────────────────────────────
 function openDB() {
@@ -57,381 +68,461 @@ async function getQueueCount() {
   });
 }
 
-// ── GPS ───────────────────────────────────────────────────────────────────────
-function getPosition() {
+async function deleteFromQueue(id) {
+  const db = await openDB();
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("Geolokace není podporována"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 30000,
-    });
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const req = tx.objectStore(STORE_NAME).delete(id);
+    req.onsuccess = resolve;
+    req.onerror = (e) => reject(e.target.error);
   });
 }
 
-// ── Baterie ───────────────────────────────────────────────────────────────────
+async function getAllFromQueue() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).getAll();
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+// ── GPS (Capacitor Geolocation) ──────────────────────────────────────────────
+async function getPosition() {
+  const Geolocation = getCapacitorPlugin("Geolocation");
+  if (!Geolocation) {
+    throw new Error("Geolocation plugin není dostupný");
+  }
+  const pos = await Geolocation.getCurrentPosition({
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 30000,
+  });
+  return pos;
+}
+
+// ── Baterie (Capacitor Device) ────────────────────────────────────────────────
 async function initBattery() {
-  if (!navigator.getBattery) return;
+  const Device = getCapacitorPlugin("Device");
+  if (!Device) return;
   try {
-    const battery = await navigator.getBattery();
-    batteryLevel = Math.round(battery.level * 100);
-    battery.addEventListener("levelchange", () => {
-      batteryLevel = Math.round(battery.level * 100);
-      updateStatus();
-    });
+    const info = await Device.getBatteryInfo();
+    batteryLevel = Math.round((info.batteryLevel || 0) * 100);
+    // Capacitor Device nemá real-time battery listener,
+    // budeme aktualizovat při každém sendNote
   } catch {
-    // Battery API nedostupná — nevadí
+    // Battery API nedostupná
   }
 }
 
-// ── Speech Recognition ────────────────────────────────────────────────────────
-async function initSpeech() {
-  speechRecognitionCtor =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
+async function refreshBattery() {
+  const Device = getCapacitorPlugin("Device");
+  if (!Device) return;
+  try {
+    const info = await Device.getBatteryInfo();
+    batteryLevel = Math.round((info.batteryLevel || 0) * 100);
+  } catch {
+    // ignorovat
+  }
+}
 
-  if (!speechRecognitionCtor) {
-    document.getElementById("btn-record").disabled = true;
-    showError(
-      "Hlasové rozpoznávání není podporováno. Použij Chrome na Androidu."
-    );
-    speechMode = "unavailable";
+// ── Network (Capacitor Network) ──────────────────────────────────────────────
+async function initNetwork() {
+  const Network = getCapacitorPlugin("Network");
+  if (!Network) {
+    // Fallback na navigator.onLine
+    isOnline = navigator.onLine;
+    window.addEventListener("online", () => {
+      isOnline = true;
+      onNetworkChange();
+    });
+    window.addEventListener("offline", () => {
+      isOnline = false;
+      onNetworkChange();
+    });
     return;
   }
 
-  recognition = new speechRecognitionCtor();
-  recognition.lang = SPEECH_LANG;
-  recognition.continuous = false;   // jednorázový režim — žádné duplicity
-  recognition.interimResults = true;
-  recognition.processLocally = false;
+  try {
+    const status = await Network.getStatus();
+    isOnline = status.connected;
+  } catch {
+    isOnline = navigator.onLine;
+  }
 
-  recognition.onaudiostart = () => {
-    setRecordingUI(true);
-  };
+  Network.addListener("networkStatusChange", (status) => {
+    isOnline = status.connected;
+    onNetworkChange();
+  });
+}
 
-  recognition.onresult = (event) => {
-    let interim = "";
-    let final = "";
-    for (let i = 0; i < event.results.length; i++) {
-      const t = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        final += t;
-      } else {
-        interim += t;
+async function onNetworkChange() {
+  await updateStatus();
+  if (isOnline) {
+    // Při přechodu do online: vyprázdnit offline frontu
+    await flushQueue();
+  }
+}
+
+// ── Offline fronta — flush (nahrazuje Service Worker Background Sync) ────────
+async function flushQueue() {
+  // Mutex — zajistí, že běží max jedna instance současně
+  if (isFlushing) {
+    console.log("Flush queue: již probíhá, přeskakuji");
+    return;
+  }
+  isFlushing = true;
+
+  try {
+    const records = await getAllFromQueue();
+    if (records.length === 0) return;
+
+    console.log(`Flush queue: ${records.length} čekajících záznamů`);
+
+    for (const record of records) {
+      try {
+        const res = await fetch(record.url, {
+          method: "POST",
+          body: JSON.stringify(record.payload),
+          // bez Content-Type → "text/plain" → simple request → žádný CORS preflight
+        });
+
+        if (res.ok) {
+          await deleteFromQueue(record.id);
+          console.log(`Odesláno z fronty: ${record.id}`);
+        }
+      } catch {
+        // Síť stále nedostupná — přestat, zkusíme znovu příště
+        console.log("Flush queue: síť nedostupná, zkusíme později");
+        break;
       }
     }
-    // Zobraz pouze výsledky aktuální session — bez akumulace přes restarty
-    document.getElementById("transcript").textContent =
-      currentTranscript + (final || interim);
-    if (final) currentTranscript += final;
-  };
 
-  recognition.onerror = (event) => {
-    isRecording = false;
-    setRecordingUI(false);
-    if (event.error === "language-not-supported") {
-      speechMode = navigator.onLine ? "cloud" : "local-missing";
-      showError(
-        "Offline čeština není v zařízení dostupná. Připoj telefon k internetu, klepni znovu na Mluvit a aplikace se pokusí jazykový balíček stáhnout."
-      );
-    } else if (event.error === "network") {
-      showError(
-        "STT v síťovém režimu selhalo. Pokud má zařízení podporu offline češtiny, připoj telefon jednou k internetu a zkus znovu stáhnout jazykový balíček."
-      );
-    } else if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-      showError(
-        "Přístup k mikrofonu byl zamítnut. Otevři Nastavení Chrome → Oprávnění webu → Mikrofon a povol přístup pro tuto stránku."
-      );
-    } else if (event.error === "no-speech") {
-      stopRecording();
+    await updateStatus();
+  } finally {
+    isFlushing = false;
+  }
+}
+
+// ── Google STT (online rozpoznávání) ─────────────────────────────────────────
+async function initGoogleSTT() {
+  const GoogleSTT = getCapacitorPlugin("GoogleSTT");
+  if (!GoogleSTT) {
+    console.log("GoogleSTT plugin není dostupný");
+    return;
+  }
+
+  try {
+    const result = await GoogleSTT.isAvailable();
+    googleSttAvailable = result.available;
+    console.log("Google STT dostupný:", googleSttAvailable);
+  } catch (e) {
+    console.log("Google STT kontrola selhala:", e.message);
+    googleSttAvailable = false;
+  }
+
+  if (!googleSttAvailable) return;
+
+  // Naslouchej výsledkům — stejný formát jako Vosk
+  GoogleSTT.addListener("result", (event) => {
+    // Google STT posílá partial results jako CELÝ text (ne jen delta),
+    // takže pro partial nahradíme celý zobrazený text
+    if (activeEngine !== "google") return;
+
+    if (event.isFinal) {
+      const text = event.text || "";
+      if (text) {
+        currentTranscript += (currentTranscript ? " " : "") + text;
+        document.getElementById("transcript").value = currentTranscript;
+        autoResize();
+      }
     } else {
-      showError(`Chyba rozpoznávání: ${event.error}`);
+      const partial = event.text || "";
+      document.getElementById("transcript").value =
+        currentTranscript + (currentTranscript && partial ? " " : "") + partial;
+      autoResize();
     }
-  };
+  });
 
-  recognition.onend = () => {
-    // continuous=false: session skončila přirozeně (pauza v řeči)
-    // Zastavíme nahrávání a zobrazíme výsledek
-    if (isRecording) {
-      stopRecording();
+  GoogleSTT.addListener("stopped", (event) => {
+    console.log("Google STT stopped:", event.reason);
+    if (!isRecording || activeEngine !== "google") return;
+
+    // Pokud uživatel ručně nezastavil a STT skončilo samo (ticho / end of speech)
+    // → auto-restart session, aby nahrávání pokračovalo bez přerušení
+    if (!userStoppedRecording) {
+      console.log("Google STT auto-restart po silence/end_of_speech");
+      restartCurrentEngine();
+    } else {
+      finishRecording();
     }
-  };
-  await probeOnDeviceSpeech();
+  });
+
+  GoogleSTT.addListener("error", (event) => {
+    console.error("Google STT error:", event.message);
+    if (isRecording && activeEngine === "google") {
+      isRecording = false;
+      activeEngine = null;
+      setRecordingUI(false);
+      showError("Chyba rozpoznávání (Google): " + event.message);
+    }
+  });
+}
+
+// ── Vosk Speech Recognition (offline fallback) ──────────────────────────────
+async function initVosk() {
+  const VoskSTT = getCapacitorPlugin("VoskSTT");
+  if (!VoskSTT) {
+    console.log("VoskSTT plugin není dostupný");
+    return;
+  }
+
+  voskLoading = true;
+  await updateStatus();
+
+  try {
+    await VoskSTT.initialize();
+    voskReady = true;
+    voskLoading = false;
+    console.log("Vosk model načten");
+  } catch (e) {
+    voskLoading = false;
+    voskReady = false;
+    console.error("Nepodařilo se načíst Vosk model:", e.message);
+  }
+
+  // Naslouchej výsledkům rozpoznávání
+  VoskSTT.addListener("result", (event) => {
+    if (activeEngine !== "vosk") return;
+
+    if (event.isFinal) {
+      const text = event.text || "";
+      if (text) {
+        currentTranscript += (currentTranscript ? " " : "") + text;
+        document.getElementById("transcript").value = currentTranscript;
+        autoResize();
+      }
+    } else {
+      const partial = event.text || "";
+      document.getElementById("transcript").value =
+        currentTranscript + (currentTranscript && partial ? " " : "") + partial;
+      autoResize();
+    }
+  });
+
+  VoskSTT.addListener("stopped", (event) => {
+    console.log("Vosk stopped:", event.reason);
+    if (!isRecording || activeEngine !== "vosk") return;
+
+    // Pokud uživatel ručně nezastavil a Vosk skončilo samo (detekce ticha)
+    // → auto-restart session, aby nahrávání pokračovalo bez přerušení
+    if (!userStoppedRecording) {
+      console.log("Vosk auto-restart po silence");
+      restartCurrentEngine();
+    } else {
+      finishRecording();
+    }
+  });
+
+  VoskSTT.addListener("error", (event) => {
+    console.error("Vosk error:", event.message);
+    if (isRecording && activeEngine === "vosk") {
+      isRecording = false;
+      activeEngine = null;
+      setRecordingUI(false);
+      showError("Chyba rozpoznávání (Vosk): " + event.message);
+    }
+  });
+
   await updateStatus();
 }
 
-async function probeOnDeviceSpeech() {
-  onDeviceAvailability = "unknown";
+// ── Inicializace obou STT enginů ─────────────────────────────────────────────
+async function initSpeech() {
+  // Inicializuj oba enginy paralelně
+  await Promise.all([initGoogleSTT(), initVosk()]);
 
-  if (!recognition || !speechRecognitionCtor) {
-    speechMode = "unavailable";
-    return;
+  // Pokud ani jeden engine není k dispozici, zablokuj tlačítko
+  if (!googleSttAvailable && !voskReady) {
+    document.getElementById("btn-record").disabled = true;
+    showError("Žádný STT engine není dostupný.");
   }
 
-  const supportsOnDevice =
-    "processLocally" in recognition &&
-    typeof speechRecognitionCtor.available === "function" &&
-    typeof speechRecognitionCtor.install === "function";
-
-  if (!supportsOnDevice) {
-    speechMode = navigator.onLine ? "cloud" : "cloud-offline-blocked";
-    return;
-  }
-
-  try {
-    onDeviceAvailability = await speechRecognitionCtor.available({
-      langs: [SPEECH_LANG],
-      processLocally: true,
-    });
-  } catch {
-    speechMode = navigator.onLine ? "cloud" : "cloud-offline-blocked";
-    return;
-  }
-
-  if (onDeviceAvailability === "available") {
-    speechMode = "local-ready";
-  } else if (
-    onDeviceAvailability === "downloadable" ||
-    onDeviceAvailability === "downloading"
-  ) {
-    speechMode = navigator.onLine ? "local-installable" : "local-pending-download";
-  } else {
-    speechMode = navigator.onLine ? "cloud" : "cloud-offline-blocked";
-  }
+  await updateStatus();
 }
 
-async function ensureSpeechReady() {
-  await probeOnDeviceSpeech();
-
-  if (!recognition) {
-    return false;
-  }
-
-  if (onDeviceAvailability === "available") {
-    recognition.processLocally = true;
-    speechMode = "local-ready";
-    return true;
-  }
-
-  if (
-    (onDeviceAvailability === "downloadable" ||
-      onDeviceAvailability === "downloading") &&
-    navigator.onLine &&
-    typeof speechRecognitionCtor.install === "function"
-  ) {
-    document.getElementById("btn-record").disabled = true;
-    document.getElementById("btn-record").textContent = "STAHUJI…";
-    showError("Stahuji češtinu pro offline diktování. Chvilku strpení…");
-
-    try {
-      const installed = await speechRecognitionCtor.install({
-        langs: [SPEECH_LANG],
-      });
-
-      await probeOnDeviceSpeech();
-
-      if (installed && onDeviceAvailability === "available") {
-        recognition.processLocally = true;
-        speechMode = "local-ready";
-        document.getElementById("section-error").classList.add("hidden");
-        return true;
-      }
-
-      showError(
-        "Čeština pro offline diktování se nepodařila nainstalovat. Zkus to znovu online, případně ověř podporu v aktuální verzi Chrome."
-      );
-      return false;
-    } catch (e) {
-      showError("Stažení offline češtiny selhalo: " + e.message);
-      return false;
-    } finally {
-      document.getElementById("btn-record").disabled = false;
-      setRecordingUI(false);
-      await updateStatus();
-    }
-  }
-
-  recognition.processLocally = false;
-  if (!navigator.onLine) {
-    speechMode = "cloud-offline-blocked";
-    showError(
-      "Offline diktování není na tomto zařízení zatím připravené. Připoj telefon k internetu a spusť diktování jednou online, aby šlo případně stáhnout češtinu pro lokální rozpoznávání."
-    );
-    return false;
-  }
-
-  speechMode = "cloud";
-  return true;
+/**
+ * Vrátí engine, který se má použít pro nahrávání.
+ * Online + Google dostupný → "google"
+ * Jinak → "vosk" (pokud je ready)
+ * Jinak → null
+ */
+function chooseEngine() {
+  if (isOnline && googleSttAvailable) return "google";
+  if (voskReady) return "vosk";
+  return null;
 }
 
 function getSpeechStatusText() {
-  switch (speechMode) {
-    case "local-ready":
-      return "STT: offline";
-    case "local-installable":
-      return "STT: offline ke stažení";
-    case "local-pending-download":
-      return "STT: offline čeká na internet";
-    case "cloud":
-      return "STT: online";
-    case "cloud-offline-blocked":
-      return "STT: offline nedostupné";
-    case "local-missing":
-      return "STT: chybí čeština";
-    case "unavailable":
-      return "STT: nepodporováno";
-    default:
-      return "STT: zjišťuji";
-  }
-}
+  if (voskLoading) return "STT: načítám Vosk…";
 
-function getOnDeviceSupportText() {
-  if (!recognition || !speechRecognitionCtor) return "ne";
-
-  const supportsOnDevice =
-    "processLocally" in recognition &&
-    typeof speechRecognitionCtor.available === "function" &&
-    typeof speechRecognitionCtor.install === "function";
-
-  return supportsOnDevice ? "ano" : "ne";
-}
-
-function getAvailabilityText() {
-  switch (onDeviceAvailability) {
-    case "available":
-      return "nainstalováno";
-    case "downloadable":
-      return "lze stáhnout";
-    case "downloading":
-      return "stahuje se";
-    case "unavailable":
-      return "není dostupná";
-    case "unknown":
-    default:
-      return "neznámé";
-  }
-}
-
-function getModeDetailText() {
-  switch (speechMode) {
-    case "local-ready":
-      return "lokální rozpoznávání v zařízení";
-    case "local-installable":
-      return "offline balíček je dostupný ke stažení";
-    case "local-pending-download":
-      return "offline balíček čeká na internet";
-    case "cloud":
-      return "síťové rozpoznávání přes browser";
-    case "cloud-offline-blocked":
-      return "jen cloud, offline teď nepůjde";
-    case "local-missing":
-      return "on-device režim selhal kvůli chybějící češtině";
-    case "unavailable":
-      return "browser STT nepodporuje";
-    default:
-      return "zjišťuji";
-  }
-}
-
-function getDiagnosticHint() {
-  switch (speechMode) {
-    case "local-ready":
-      return "Můžeš přepnout telefon offline a diktovat dál.";
-    case "local-installable":
-      return "Klepni na Mluvit online; aplikace zkusí stáhnout češtinu.";
-    case "local-pending-download":
-      return "Připoj telefon k internetu a spusť diktování jednou online.";
-    case "cloud":
-      return "Diktování funguje, ale bez internetu nepoběží.";
-    case "cloud-offline-blocked":
-      return "Na tomto zařízení zatím není připravené offline STT.";
-    case "local-missing":
-      return "Zkus znovu online, aby šlo stáhnout český jazykový balíček.";
-    case "unavailable":
-      return "Použij novější Chrome na Androidu.";
-    default:
-      return "Probíhá detekce schopností zařízení.";
-  }
+  const engine = chooseEngine();
+  if (engine === "google") return "STT: online (Google)";
+  if (engine === "vosk") return "STT: offline (Vosk)";
+  return "STT: nedostupné";
 }
 
 function updateDiagnostics() {
-  const apiEl = document.getElementById("diag-api");
-  const onDeviceEl = document.getElementById("diag-ondevice");
-  const langEl = document.getElementById("diag-lang");
+  const engineEl = document.getElementById("diag-engine");
+  const modelEl = document.getElementById("diag-model");
+  const statusEl = document.getElementById("diag-status");
   const modeEl = document.getElementById("diag-mode");
   const hintEl = document.getElementById("diag-hint");
 
-  if (!apiEl || !onDeviceEl || !langEl || !modeEl || !hintEl) {
-    return;
-  }
+  if (!engineEl || !modelEl || !statusEl || !modeEl || !hintEl) return;
 
-  apiEl.textContent = speechRecognitionCtor ? "podporováno" : "nepodporováno";
-  onDeviceEl.textContent = getOnDeviceSupportText();
-  langEl.textContent = getAvailabilityText();
-  modeEl.textContent = getModeDetailText();
-  hintEl.textContent = getDiagnosticHint();
+  const engine = chooseEngine();
+
+  if (voskLoading) {
+    engineEl.textContent = "Vosk (offline)";
+    modelEl.textContent = "vosk-model-small-cs";
+    statusEl.textContent = "načítání…";
+    modeEl.textContent = "inicializace";
+    hintEl.textContent = "Model se načítá, chvilku strpení.";
+  } else if (engine === "google") {
+    engineEl.textContent = "Google STT (online)";
+    modelEl.textContent = "—";
+    statusEl.textContent = "připraven";
+    modeEl.textContent = "online rozpoznávání";
+    hintEl.textContent = "Vysoká kvalita přes internet. Offline fallback: Vosk.";
+  } else if (engine === "vosk") {
+    engineEl.textContent = "Vosk (offline)";
+    modelEl.textContent = "vosk-model-small-cs";
+    statusEl.textContent = "připraven";
+    modeEl.textContent = "offline rozpoznávání";
+    hintEl.textContent = "Diktování funguje i bez internetu.";
+  } else {
+    engineEl.textContent = "—";
+    modelEl.textContent = "—";
+    statusEl.textContent = "chyba";
+    modeEl.textContent = "nedostupné";
+    hintEl.textContent = "Zkus restartovat aplikaci.";
+  }
+}
+
+/**
+ * Interní restart STT session po auto-stop (ticho/pomlka).
+ * Zachová currentTranscript a stav UI — uživatel si nevšimne přerušení.
+ */
+async function restartCurrentEngine() {
+  if (!isRecording || userStoppedRecording) return;
+
+  const engine = activeEngine;
+  if (!engine) return;
+
+  console.log("Restartuji STT engine:", engine);
+
+  try {
+    if (engine === "google") {
+      const GoogleSTT = getCapacitorPlugin("GoogleSTT");
+      if (GoogleSTT) await GoogleSTT.startListening();
+    } else if (engine === "vosk") {
+      const VoskSTT = getCapacitorPlugin("VoskSTT");
+      if (VoskSTT) await VoskSTT.startListening();
+    }
+    // UI zůstane beze změny (indikátor nahrávání svítí dál)
+  } catch (e) {
+    console.error("Restart STT selhal:", e.message);
+    // Restart selhal → ukončíme normálně
+    isRecording = false;
+    activeEngine = null;
+    userStoppedRecording = true;
+    setRecordingUI(false);
+    const transcript = document.getElementById("transcript");
+    transcript.readOnly = false;
+    const text = transcript.value.trim();
+    if (text) {
+      document.getElementById("section-confirm").classList.remove("hidden");
+    }
+  }
 }
 
 // ── Ovládání nahrávání ────────────────────────────────────────────────────────
 async function startRecording() {
-  if (!recognition) {
-    showError("STT není inicializováno. Použij Chrome na Androidu.");
-    return;
-  }
+  const engine = chooseEngine();
 
-  // Explicitní check oprávnění mikrofonu před spuštěním
-  if (navigator.permissions) {
-    try {
-      const perm = await navigator.permissions.query({ name: "microphone" });
-      if (perm.state === "denied") {
-        showError(
-          "Přístup k mikrofonu byl trvale zamítnut. Otevři Nastavení Chrome → Oprávnění webu → Mikrofon a povol přístup."
-        );
-        return;
-      }
-    } catch {
-      // permissions API nedostupné — pokračujeme, recognition.onerror to zachytí
-    }
+  if (!engine) {
+    showError("STT není inicializováno.");
+    return;
   }
 
   currentTranscript = "";
-  document.getElementById("transcript").textContent = "";
+  const transcript = document.getElementById("transcript");
+  transcript.value = "";
+  transcript.readOnly = true;
+  autoResize();
   document.getElementById("section-confirm").classList.add("hidden");
   document.getElementById("section-error").classList.add("hidden");
 
-  const speechReady = await ensureSpeechReady();
-  if (!speechReady) {
-    await updateStatus();
-    return;
-  }
-
-  // isRecording = true PŘED start() — předchází race condition s onend
   isRecording = true;
+  activeEngine = engine;
+  userStoppedRecording = false;
 
   try {
-    recognition.start();
-    // UI se zobrazí až v onaudiostart (potvrzení že mikrofon skutečně nahrává)
-    // Mezitím ukážeme "čekám" stav
-    document.getElementById("btn-record").textContent = "…";
+    if (engine === "google") {
+      const GoogleSTT = getCapacitorPlugin("GoogleSTT");
+      await GoogleSTT.startListening();
+      console.log("Nahrávání spuštěno (Google STT)");
+    } else {
+      const VoskSTT = getCapacitorPlugin("VoskSTT");
+      await VoskSTT.startListening();
+      console.log("Nahrávání spuštěno (Vosk)");
+    }
+    setRecordingUI(true);
   } catch (e) {
     isRecording = false;
-    showError("Nelze spustit nahrávání: " + e.message);
+    activeEngine = null;
+    if (e.message && e.message.includes("permission")) {
+      showError("Přístup k mikrofonu byl zamítnut. Povol oprávnění v nastavení aplikace.");
+    } else {
+      showError("Nelze spustit nahrávání: " + e.message);
+    }
   }
 }
 
-function stopRecording() {
-  if (!recognition) return;
+async function stopRecording() {
   isRecording = false;
+  userStoppedRecording = true;
+
   try {
-    recognition.stop();
+    if (activeEngine === "google") {
+      const GoogleSTT = getCapacitorPlugin("GoogleSTT");
+      if (GoogleSTT) await GoogleSTT.stopListening();
+    } else if (activeEngine === "vosk") {
+      const VoskSTT = getCapacitorPlugin("VoskSTT");
+      if (VoskSTT) await VoskSTT.stopListening();
+    }
   } catch {
     // already stopped
   }
+
+  activeEngine = null;
+  finishRecording();
+}
+
+/**
+ * Společná logika po ukončení nahrávání (ať už manuálně nebo auto-stop).
+ * Zobrazí potvrzovací sekci, pokud je rozpoznaný text.
+ */
+function finishRecording() {
+  isRecording = false;
+  activeEngine = null;
   setRecordingUI(false);
 
-  const text = document.getElementById("transcript").textContent.trim();
+  const transcript = document.getElementById("transcript");
+  transcript.readOnly = false;
+  const text = transcript.value.trim();
   if (text) {
     document.getElementById("section-confirm").classList.remove("hidden");
   }
@@ -453,11 +544,14 @@ function setRecordingUI(active) {
 
 // ── Odeslání poznámky ─────────────────────────────────────────────────────────
 async function sendNote() {
-  const note = document.getElementById("transcript").textContent.trim();
+  const note = document.getElementById("transcript").value.trim();
   if (!note) return;
 
   document.getElementById("btn-send").disabled = true;
   document.getElementById("btn-send").textContent = "Odesílám…";
+
+  // Aktualizovat baterii
+  await refreshBattery();
 
   let lat = null;
   let lon = null;
@@ -467,7 +561,7 @@ async function sendNote() {
     lat = pos.coords.latitude;
     lon = pos.coords.longitude;
   } catch {
-    // GPS nedostupná — odešleme bez souřadnic (backend to přijme, mapa ignoruje)
+    // GPS nedostupná — odešleme bez souřadnic
     showError("GPS nedostupná — poznámka uložena bez polohy.");
   }
 
@@ -481,29 +575,24 @@ async function sendNote() {
   };
 
   try {
-    // Vždy ulož do fronty jako záloha
-    const id = await enqueue(payload);
-
-    if (navigator.onLine) {
+    if (isOnline) {
+      // Online: pošli přímo, při selhání ulož do fronty
       try {
-        // Online: odeslat přímo hned
         await directPost(payload);
-        // Úspěch: smaž z fronty (už není potřeba)
-        await deleteFromQueue(id);
         showSuccess("Odesláno!");
       } catch (postError) {
-        // POST selhal i při online (timeout, chyba serveru…)
-        // Nech v frontě, BackgroundSync to zkusí znovu
-        scheduleBackgroundSync();
+        console.log("Přímé odeslání selhalo, ukládám do fronty:", postError);
+        await enqueue(payload);
         showSuccess("Odeslání selhalo, zkusí se znovu automaticky.");
       }
     } else {
-      // Offline: BackgroundSync odešle až bude signál
-      scheduleBackgroundSync();
+      // Offline: ulož do fronty
+      await enqueue(payload);
       showSuccess("Offline — odešle se automaticky při signálu.");
     }
 
-    document.getElementById("transcript").textContent = "";
+    document.getElementById("transcript").value = "";
+    autoResize();
     document.getElementById("section-confirm").classList.add("hidden");
     currentTranscript = "";
     await updateStatus();
@@ -524,34 +613,22 @@ async function directPost(payload) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
-async function deleteFromQueue(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const req = tx.objectStore(STORE_NAME).delete(id);
-    req.onsuccess = resolve;
-    req.onerror = (e) => reject(e.target.error);
-  });
-}
-
 function discardNote() {
-  document.getElementById("transcript").textContent = "";
+  document.getElementById("transcript").value = "";
+  autoResize();
   document.getElementById("section-confirm").classList.add("hidden");
   currentTranscript = "";
 }
 
-async function scheduleBackgroundSync() {
-  if ("serviceWorker" in navigator && "SyncManager" in window) {
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      await reg.sync.register(SYNC_TAG);
-    } catch {
-      // BackgroundSync nedostupný — nevadí, fronta čeká na příští online event
-    }
-  }
+// ── UI helpers ────────────────────────────────────────────────────────────────
+
+/** Auto-resize textarea to fit content (JS fallback for field-sizing: content) */
+function autoResize() {
+  const el = document.getElementById("transcript");
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
 }
 
-// ── UI helpers ────────────────────────────────────────────────────────────────
 function showError(msg) {
   const el = document.getElementById("section-error");
   el.textContent = msg;
@@ -567,55 +644,35 @@ function showSuccess(msg) {
 
 async function updateStatus() {
   const queueCount = await getQueueCount();
-  const onlineText = navigator.onLine ? "Online" : "Offline";
+  const onlineText = isOnline ? "Online" : "Offline";
   const batteryText = batteryLevel !== null ? `Baterie: ${batteryLevel}%` : "";
   const queueText = queueCount > 0 ? `Čekají: ${queueCount}` : "";
   const speechText = getSpeechStatusText();
 
-  document.getElementById("status-bar").textContent =
-    [onlineText, speechText, batteryText, queueText].filter(Boolean).join("  ·  ");
+  const dot = document.getElementById("status-dot");
+  const text = document.getElementById("status-text");
+  if (dot) dot.classList.toggle("offline", !isOnline);
+  if (text) text.textContent = [onlineText, speechText, batteryText, queueText].filter(Boolean).join("  ·  ");
   updateDiagnostics();
-}
-
-// ── Service Worker zprávy ─────────────────────────────────────────────────────
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.addEventListener("message", async (event) => {
-    if (event.data?.type === "NOTE_SENT") {
-      await updateStatus();
-    }
-  });
 }
 
 // ── Inicializace ──────────────────────────────────────────────────────────────
 async function init() {
-  // Registrace Service Workeru
-  if ("serviceWorker" in navigator) {
-    try {
-      await navigator.serviceWorker.register("./sw.js");
-    } catch (e) {
-      console.warn("SW registrace selhala:", e);
-    }
-  }
-
+  // Inicializace Capacitor pluginů
+  await initNetwork();
   await initBattery();
   await initSpeech();
   await updateStatus();
 
-  // Online/offline události
-  window.addEventListener("online", async () => {
-    await probeOnDeviceSpeech();
-    await updateStatus();
-    scheduleBackgroundSync();
-  });
-  window.addEventListener("offline", async () => {
-    await probeOnDeviceSpeech();
-    await updateStatus();
-  });
+  // Pokus o flush fronty při startu (pokud jsme online)
+  if (isOnline) {
+    flushQueue();
+  }
 
   // Tlačítka
   document.getElementById("btn-record").addEventListener("click", async () => {
     if (isRecording) {
-      stopRecording();
+      await stopRecording();
     } else {
       await startRecording();
     }
@@ -623,6 +680,9 @@ async function init() {
 
   document.getElementById("btn-send").addEventListener("click", sendNote);
   document.getElementById("btn-discard").addEventListener("click", discardNote);
+
+  // Auto-resize textarea při ruční editaci
+  document.getElementById("transcript").addEventListener("input", autoResize);
 }
 
 document.addEventListener("DOMContentLoaded", init);

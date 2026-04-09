@@ -5,27 +5,29 @@
   <title>Běh – poznámky</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#e63946" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="manifest" href="./manifest.json" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --red:    #e63946;
-      --green:  #2a9d8f;
-      --bg:     #1a1a2e;
-      --bg2:    #16213e;
-      --text:   #eaeaea;
-      --muted:  #888;
-      --radius: 12px;
+      --red:       #e63946;
+      --red-dim:   rgba(230, 57, 70, 0.18);
+      --green:     #2a9d8f;
+      --green-dim: rgba(42, 157, 143, 0.18);
+      --bg:        #0f0f1a;
+      --bg2:       #181828;
+      --bg3:       #1e1e32;
+      --text:      #eaeaea;
+      --muted:     #6e7191;
+      --border:    rgba(255, 255, 255, 0.07);
+      --radius:    14px;
+      --radius-sm: 10px;
     }
 
     body {
-      background: var(--bg);
+      background: radial-gradient(ellipse at 50% 25%, #1e2a4a 0%, #0f0f1a 70%);
+      background-attachment: fixed;
       color: var(--text);
-      font-family: system-ui, sans-serif;
+      font-family: system-ui, -apple-system, sans-serif;
       min-height: 100dvh;
       display: flex;
       flex-direction: column;
@@ -34,12 +36,32 @@
 
     /* ── Status bar ── */
     #status-bar {
-      background: var(--bg2);
+      background: rgba(15, 15, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
       color: var(--muted);
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       text-align: center;
-      padding: 6px 16px;
+      padding: 7px 16px;
       letter-spacing: 0.03em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    #status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+      transition: background 0.4s;
+    }
+
+    #status-dot.offline {
+      background: var(--red);
     }
 
     /* ── Hlavní obsah ── */
@@ -81,20 +103,26 @@
     }
 
     /* ── Hlavní tlačítko ── */
+    @keyframes record-glow {
+      0%, 100% { box-shadow: 0 0 18px 4px rgba(230, 57, 70, 0.45); }
+      50%       { box-shadow: 0 0 32px 10px rgba(230, 57, 70, 0.75); }
+    }
+
     #btn-record {
       width: 180px;
       height: 180px;
       border-radius: 50%;
-      border: 4px solid var(--red);
-      background: transparent;
+      border: 3px solid var(--red);
+      background: var(--red-dim);
       color: var(--red);
       font-size: 1.4rem;
       font-weight: 700;
       letter-spacing: 0.1em;
       cursor: pointer;
-      transition: background 0.15s, color 0.15s, transform 0.1s;
+      transition: background 0.2s, color 0.2s, transform 0.1s, box-shadow 0.2s;
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
+      box-shadow: 0 0 12px 2px rgba(230, 57, 70, 0.2);
     }
 
     #btn-record:active { transform: scale(0.95); }
@@ -102,35 +130,53 @@
     #btn-record.recording {
       background: var(--red);
       color: #fff;
+      animation: record-glow 1.2s ease-in-out infinite;
     }
 
     #btn-record:disabled {
       opacity: 0.4;
       cursor: not-allowed;
+      animation: none;
     }
 
     /* ── Přepis textu ── */
-    #transcript-box {
+    #transcript {
       width: 100%;
       max-width: 480px;
       min-height: 80px;
+      max-height: 40vh;
       background: var(--bg2);
       border-radius: var(--radius);
       padding: 14px 16px;
       font-size: 1.05rem;
       line-height: 1.5;
       color: var(--text);
-    }
-
-    #transcript {
-      white-space: pre-wrap;
+      font-family: inherit;
+      border: 1px solid var(--border);
+      outline: none;
+      resize: none;
+      overflow-y: auto;
+      field-sizing: content;
       word-break: break-word;
+      transition: border-color 0.2s;
     }
 
-    #transcript:empty::before {
-      content: "Přepis se zobrazí zde…";
+    #transcript::placeholder {
       color: var(--muted);
       font-style: italic;
+    }
+
+    #transcript:read-only {
+      opacity: 0.85;
+    }
+
+    #transcript:not(:read-only) {
+      border-color: rgba(42, 157, 143, 0.5);
+    }
+
+    #transcript:not(:read-only):focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(42, 157, 143, 0.15);
     }
 
     /* ── Diagnostika STT ── */
@@ -150,11 +196,31 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     #diagnostics summary::marker,
     #diagnostics summary::-webkit-details-marker {
+      display: none;
+    }
+
+    #diagnostics summary::before {
+      content: "▸";
+      display: inline-block;
+      transition: transform 0.2s;
       color: var(--muted);
+    }
+
+    #diagnostics[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    #diagnostics[open] #diagnostics-body {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
     }
 
     #diagnostics-body {
@@ -195,41 +261,59 @@
 
     .btn {
       flex: 1;
-      padding: 14px;
+      padding: 15px 20px;
       border: none;
       border-radius: var(--radius);
       font-size: 1rem;
       font-weight: 600;
+      letter-spacing: 0.03em;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
-      transition: opacity 0.15s, transform 0.1s;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
     }
 
     .btn:active { transform: scale(0.97); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     #btn-send {
-      background: var(--green);
+      background: linear-gradient(135deg, #2ab5a5, #1f8a7d);
       color: #fff;
+      box-shadow: 0 4px 14px rgba(42, 157, 143, 0.35);
+    }
+
+    #btn-send:active {
+      box-shadow: 0 2px 8px rgba(42, 157, 143, 0.25);
     }
 
     #btn-discard {
-      background: var(--bg2);
+      background: transparent;
       color: var(--muted);
+      border: 1px solid var(--border);
     }
 
     /* ── Zprávy ── */
     #section-error {
       width: 100%;
       max-width: 480px;
-      background: #3d0a0a;
-      border: 1px solid var(--red);
+      background: rgba(230, 57, 70, 0.1);
+      border: 1px solid rgba(230, 57, 70, 0.4);
       border-radius: var(--radius);
       padding: 12px 16px;
       font-size: 0.85rem;
       color: #ffaaaa;
       line-height: 1.4;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      backdrop-filter: blur(4px);
+    }
+
+    #section-error::before {
+      content: "⚠";
+      flex-shrink: 0;
+      font-size: 1rem;
+      opacity: 0.8;
     }
 
     #section-error.hidden { display: none; }
@@ -237,14 +321,25 @@
     #section-success {
       width: 100%;
       max-width: 480px;
-      background: #0a2e1a;
-      border: 1px solid var(--green);
+      background: rgba(42, 157, 143, 0.1);
+      border: 1px solid rgba(42, 157, 143, 0.4);
       border-radius: var(--radius);
       padding: 12px 16px;
       font-size: 0.9rem;
       color: #88ffcc;
       text-align: center;
       font-weight: 600;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+
+    #section-success::before {
+      content: "✓";
+      flex-shrink: 0;
+      font-size: 1.1rem;
     }
 
     #section-success.hidden { display: none; }
@@ -259,13 +354,22 @@
 
     footer a {
       color: var(--muted);
-      text-decoration: underline;
+      text-decoration: none;
+      opacity: 0.55;
+      transition: opacity 0.2s;
+    }
+
+    footer a:hover, footer a:focus {
+      opacity: 1;
     }
   </style>
 </head>
 <body>
 
-  <div id="status-bar">Načítání…</div>
+  <div id="status-bar">
+    <span id="status-dot"></span>
+    <span id="status-text">Načítání…</span>
+  </div>
 
   <main>
     <div id="recording-indicator" class="hidden">
@@ -274,31 +378,29 @@
 
     <button id="btn-record">MLUVIT</button>
 
-    <div id="transcript-box">
-      <div id="transcript"></div>
-    </div>
+    <textarea id="transcript" placeholder="Přepis se zobrazí zde…" readonly rows="2"></textarea>
 
     <details id="diagnostics">
       <summary>Diagnostika STT</summary>
       <div id="diagnostics-body">
         <div class="diag-row">
-          <div class="diag-label">Web Speech API</div>
-          <div class="diag-value" id="diag-api">zjišťuji…</div>
+          <div class="diag-label">Engine</div>
+          <div class="diag-value" id="diag-engine">zjišťuji…</div>
         </div>
         <div class="diag-row">
-          <div class="diag-label">On-device API</div>
-          <div class="diag-value" id="diag-ondevice">zjišťuji…</div>
+          <div class="diag-label">Model</div>
+          <div class="diag-value" id="diag-model">zjišťuji…</div>
         </div>
         <div class="diag-row">
-          <div class="diag-label">Čeština offline</div>
-          <div class="diag-value" id="diag-lang">zjišťuji…</div>
+          <div class="diag-label">Stav</div>
+          <div class="diag-value" id="diag-status">zjišťuji…</div>
         </div>
         <div class="diag-row">
           <div class="diag-label">Aktivní režim</div>
           <div class="diag-value" id="diag-mode">zjišťuji…</div>
         </div>
         <div class="diag-row">
-          <div class="diag-label">Doporučení</div>
+          <div class="diag-label">Info</div>
           <div class="diag-value" id="diag-hint">Počkej na inicializaci.</div>
         </div>
       </div>
