@@ -36,6 +36,20 @@ let audioStopTimer = null;
 let audioDurationInterval = null;
 let audioRecordingStartedAt = 0;
 
+let currentTranscript = "";
+let googleSttAvailable = false;
+let voskReady = false;
+let voskLoading = false;
+let activeEngine = null;
+let activeCaptureMode = null;
+let isOnline = true;
+let batteryLevel = null;
+let isFlushing = false;
+let mediaStream = null;
+let mediaRecorder = null;
+let mediaChunks = [];
+let mediaMimeType = null;
+
 function normalizeTranscriptWhitespace(text) {
   return String(text || "")
     .replace(/\s+/g, " ")
@@ -1224,16 +1238,8 @@ async function init() {
   // Inicializace Capacitor pluginů
   await initNetwork();
   await initBattery();
-  await initSpeech();
-  await updateStatus();
-  configureMapLinks();
 
-  // Pokus o flush fronty při startu (pokud jsme online)
-  if (isOnline) {
-    flushQueue();
-  }
-
-  // Tlačítka
+  // Zaregistrování tlačítek ihned, aby UI reagovalo i během načítání STT
   setRecordingUI(false);
   document.getElementById("btn-record").addEventListener("click", async () => {
     if (isRecording) {
@@ -1262,6 +1268,21 @@ async function init() {
 
   // Auto-resize textarea při ruční editaci
   document.getElementById("transcript").addEventListener("input", autoResize);
+
+  configureMapLinks();
+
+  // Inicializujeme STT neblokujícím způsobem, aby uživatel nečekal
+  initSpeech().then(() => {
+    updateStatus();
+    if (!isRecording) setRecordingUI(false);
+  });
+  
+  await updateStatus();
+
+  // Pokus o flush fronty při startu (pokud jsme online)
+  if (isOnline) {
+    flushQueue();
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);
