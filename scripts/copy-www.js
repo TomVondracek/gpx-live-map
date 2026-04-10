@@ -13,6 +13,21 @@ const ROOT = path.resolve(__dirname, "..");
 const WWW = path.join(ROOT, "www");
 const DEFAULT_RUNTIME_CONFIG = "window.RUN_NOTES_CONFIG = window.RUN_NOTES_CONFIG || {};\n";
 
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  fs.mkdirSync(dest, { recursive: true });
+
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
 // Zajisti existenci www/
 if (!fs.existsSync(WWW)) {
   fs.mkdirSync(WWW, { recursive: true });
@@ -23,7 +38,7 @@ if (!fs.existsSync(WWW)) {
 const appHtml = path.join(ROOT, "app.html");
 if (fs.existsSync(appHtml)) {
   let content = fs.readFileSync(appHtml, "utf-8");
-  content = content.replace(
+  content = content.replaceAll(
     'href="./index.html"',
     'href="./map.html"'
   );
@@ -61,6 +76,13 @@ const gpx = path.join(ROOT, "trasa.gpx");
 if (fs.existsSync(gpx)) {
   fs.copyFileSync(gpx, path.join(WWW, "trasa.gpx"));
   console.log("  trasa.gpx -> www/trasa.gpx");
+}
+
+// vendor/ → www/vendor/ (lokální JS/CSS/assets pro offline mapu)
+const vendorDir = path.join(ROOT, "vendor");
+if (fs.existsSync(vendorDir)) {
+  copyDirRecursive(vendorDir, path.join(WWW, "vendor"));
+  console.log("  vendor -> www/vendor");
 }
 
 console.log("Web assets copied to www/");

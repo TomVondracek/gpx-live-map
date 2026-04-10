@@ -8,6 +8,13 @@ const READ_TOKEN = APP_CONFIG.readToken || APP_CONFIG.mapToken || "";
 
 const DB_NAME = "beh-poznamky-db";
 const STORE_NAME = "queue";
+const MAX_AUDIO_DURATION_MS = 30000;
+const MAX_AUDIO_SIZE_BYTES = 5 * 1024 * 1024;
+const AUDIO_MIME_CANDIDATES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+];
 
 // ── Capacitor Plugins ─────────────────────────────────────────────────────────
 // V Capacitor WebView jsou pluginy dostupné přes globální Capacitor.Plugins
@@ -30,6 +37,15 @@ let isFlushing = false;
 let googleSttAvailable = false;  // zda je Google STT k dispozici na zařízení
 let activeEngine = null;          // "google" | "vosk" | null — který engine právě nahrává
 let userStoppedRecording = false; // true = uživatel stiskl STOP → neprovádět auto-restart
+let activeCaptureMode = null;     // "speech" | "audio" | null
+let mediaRecorder = null;
+let mediaStream = null;
+let mediaChunks = [];
+let mediaMimeType = "";
+let audioStopTimer = null;
+let audioRecordingStartedAt = 0;
+let pendingAudioNote = null;
+let pendingAudioObjectUrl = "";
 
 function normalizeTranscriptWhitespace(text) {
   return String(text || "")
@@ -98,6 +114,137 @@ function appendFinalTranscriptSegment(text, options = {}) {
   currentTranscript += (currentTranscript ? " " : "") + formatted;
   document.getElementById("transcript").value = currentTranscript;
   autoResize();
+}
+
+function supportsMediaRecording() {
+  return (
+    typeof window !== "undefined" &&
+    typeof MediaRecorder !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === "function"
+  );
+}
+
+async function ensureMicrophonePermission() {
+  const GoogleSTT = getCapacitorPlugin("GoogleSTT");
+  if (!GoogleSTT) return true;
+
+  try {
+    if (typeof GoogleSTT.checkMicrophonePermission === "function") {
+      const status = await GoogleSTT.checkMicrophonePermission();
+      if (status && status.granted) {
+        return true;
+      }
+    }
+
+    if (typeof GoogleSTT.requestMicrophonePermission === "function") {
+      const result = await GoogleSTT.requestMicrophonePermission();
+      return Boolean(result && result.granted);
+    }
+  } catch (error) {
+    console.warn("Vyžádání mikrofonu přes plugin selhalo:", error);
+  }
+
+  return true;
+}
+
+function pickSupportedAudioMimeType() {
+  if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") {
+    return "";
+  }
+
+  for (const mimeType of AUDIO_MIME_CANDIDATES) {
+    if (MediaRecorder.isTypeSupported(mimeType)) {
+      return mimeType;
+    }
+  }
+  return "";
+}
+
+function formatAudioDuration(durationSec) {
+  const totalSeconds = Math.max(1, Math.round(Number(durationSec) || 0));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds} s`;
+  return `${minutes}:${String(seconds).padStart(2, "0")} min`;
+}
+
+function getAudioFileExtension(mimeType) {
+  if (String(mimeType || "").includes("mp4")) return "m4a";
+  if (String(mimeType || "").includes("ogg")) return "ogg";
+  return "webm";
+}
+
+function clearPendingAudioPreview() {
+  if (pendingAudioObjectUrl) {
+    URL.revokeObjectURL(pendingAudioObjectUrl);
+    pendingAudioObjectUrl = "";
+  }
+
+  pendingAudioNote = null;
+
+  const preview = document.getElementById("audio-preview");
+  const player = document.getElementById("audio-player");
+  const meta = document.getElementById("audio-preview-meta");
+  if (player) {
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+  }
+  if (meta) {
+    meta.textContent = "čekám na nahrávku…";
+  }
+  if (preview) {
+    preview.classList.add("hidden");
+  }
+}
+
+function showAudioPreview(audioNote) {
+  const preview = document.getElementById("audio-preview");
+  const player = document.getElementById("audio-player");
+  const meta = document.getElementById("audio-preview-meta");
+  if (!preview || !player || !meta) return;
+
+  clearPendingAudioPreview();
+  pendingAudioNote = audioNote;
+  pendingAudioObjectUrl = URL.createObjectURL(audioNote.blob);
+
+  player.src = pendingAudioObjectUrl;
+  player.load();
+  meta.textContent = `${formatAudioDuration(audioNote.durationSec)} · ${audioNote.mimeType || "audio"}`;
+  preview.classList.remove("hidden");
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result;
+      const base64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function serializePayloadForPost(payload) {
+  if (!payload || payload.entry_type !== "audio" || !payload.audioBlob) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    audio_base64: await blobToBase64(payload.audioBlob),
+    audio_mime: payload.audioMime || payload.audioBlob.type || "audio/webm",
+    audio_duration_sec: payload.audioDurationSec ?? null,
+    audio_filename: payload.audioFileName || "",
+    audioBlob: undefined,
+    audioMime: undefined,
+    audioDurationSec: undefined,
+    audioFileName: undefined,
+  };
 }
 
 // ── IndexedDB ─────────────────────────────────────────────────────────────────
@@ -264,7 +411,11 @@ async function flushQueue() {
           break;
         }
         // Síť stále nedostupná — přestat, zkusíme znovu příště
-        console.log("Flush queue: síť nedostupná, zkusíme později");
+        console.log("Flush queue: síť nedostupná, zkusíme později", error);
+        
+        if (record.payload.entry_type === "audio") {
+           alert("FLUSH CHYBA " + record.id + ":\n" + (error.message || error) + "\n" + (error.stack || ""));
+        }
         break;
       }
     }
@@ -326,6 +477,7 @@ async function initGoogleSTT() {
     if (isRecording && activeEngine === "google") {
       isRecording = false;
       activeEngine = null;
+      activeCaptureMode = null;
       setRecordingUI(false);
       showError("Chyba rozpoznávání (Google): " + event.message);
     }
@@ -384,6 +536,7 @@ async function initVosk() {
     if (isRecording && activeEngine === "vosk") {
       isRecording = false;
       activeEngine = null;
+      activeCaptureMode = null;
       setRecordingUI(false);
       showError("Chyba rozpoznávání (Vosk): " + event.message);
     }
@@ -491,6 +644,7 @@ async function restartCurrentEngine() {
     // Restart selhal → ukončíme normálně
     isRecording = false;
     activeEngine = null;
+    activeCaptureMode = null;
     userStoppedRecording = true;
     setRecordingUI(false);
     const transcript = document.getElementById("transcript");
@@ -511,16 +665,15 @@ async function startRecording() {
     return;
   }
 
+  discardNote({ keepMessages: true });
   currentTranscript = "";
   const transcript = document.getElementById("transcript");
-  transcript.value = "";
   transcript.readOnly = true;
-  autoResize();
-  document.getElementById("section-confirm").classList.add("hidden");
   document.getElementById("section-error").classList.add("hidden");
 
   isRecording = true;
   activeEngine = engine;
+  activeCaptureMode = "speech";
   userStoppedRecording = false;
 
   try {
@@ -537,6 +690,8 @@ async function startRecording() {
   } catch (e) {
     isRecording = false;
     activeEngine = null;
+    activeCaptureMode = null;
+    setRecordingUI(false);
     if (e.message && e.message.includes("permission")) {
       showError("Přístup k mikrofonu byl zamítnut. Povol oprávnění v nastavení aplikace.");
     } else {
@@ -546,6 +701,11 @@ async function startRecording() {
 }
 
 async function stopRecording() {
+  if (activeCaptureMode === "audio") {
+    await stopAudioRecording();
+    return;
+  }
+
   isRecording = false;
   userStoppedRecording = true;
 
@@ -572,43 +732,185 @@ async function stopRecording() {
 function finishRecording() {
   isRecording = false;
   activeEngine = null;
+  activeCaptureMode = null;
   setRecordingUI(false);
 
   const transcript = document.getElementById("transcript");
   transcript.readOnly = false;
   const text = transcript.value.trim();
-  if (text) {
+  if (text || pendingAudioNote) {
     document.getElementById("section-confirm").classList.remove("hidden");
   }
 }
 
 function setRecordingUI(active) {
   const btn = document.getElementById("btn-record");
+  const audioBtn = document.getElementById("btn-audio");
   const indicator = document.getElementById("recording-indicator");
-  if (active) {
+  const label = document.getElementById("recording-label");
+
+  if (active && activeCaptureMode === "speech") {
     btn.textContent = "STOP";
     btn.classList.add("recording");
+    btn.disabled = false;
+    audioBtn.textContent = "ZVUK";
+    audioBtn.classList.remove("recording");
+    audioBtn.disabled = true;
     indicator.classList.remove("hidden");
+    label.textContent = "Nahrávám diktování";
+  } else if (active && activeCaptureMode === "audio") {
+    btn.textContent = "MLUVIT";
+    btn.classList.remove("recording");
+    btn.disabled = true;
+    audioBtn.textContent = "STOP";
+    audioBtn.classList.add("recording");
+    audioBtn.disabled = false;
+    indicator.classList.remove("hidden");
+    label.textContent = "Nahrávám hlasovou poznámku";
   } else {
     btn.textContent = "MLUVIT";
     btn.classList.remove("recording");
+    btn.disabled = !chooseEngine();
+    audioBtn.textContent = "ZVUK";
+    audioBtn.classList.remove("recording");
+    audioBtn.disabled = !supportsMediaRecording();
     indicator.classList.add("hidden");
+    label.textContent = "Nahrávám";
   }
 }
 
-// ── Odeslání poznámky ─────────────────────────────────────────────────────────
-async function sendNote() {
-  const note = document.getElementById("transcript").value.trim();
-  if (!note) return;
+function stopAudioStream() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop());
+    mediaStream = null;
+  }
+}
 
-  if (!WRITE_TOKEN) {
-    showError("Chybí write token v runtime-config.js.");
+function clearAudioRecordingTimer() {
+  if (audioStopTimer) {
+    clearTimeout(audioStopTimer);
+    audioStopTimer = null;
+  }
+}
+
+async function finalizeAudioRecording() {
+  clearAudioRecordingTimer();
+
+  const blob = new Blob(mediaChunks, { type: mediaMimeType || "audio/webm" });
+  mediaChunks = [];
+  stopAudioStream();
+  mediaRecorder = null;
+
+  if (!blob.size) {
+    pendingAudioNote = null;
+    showError("Hlasová poznámka je prázdná. Zkus nahrávání znovu.");
+    finishRecording();
     return;
   }
 
-  document.getElementById("btn-send").disabled = true;
-  document.getElementById("btn-send").textContent = "Odesílám…";
+  if (blob.size > MAX_AUDIO_SIZE_BYTES) {
+    pendingAudioNote = null;
+    showError("Hlasová poznámka je příliš velká. Zkus kratší záznam.");
+    finishRecording();
+    return;
+  }
 
+  const durationSec = Math.max(
+    1,
+    Math.round((Date.now() - audioRecordingStartedAt) / 1000),
+  );
+
+  showAudioPreview({
+    blob,
+    durationSec,
+    mimeType: blob.type || mediaMimeType || "audio/webm",
+    fileName: `hlasova-poznamka-${Date.now()}.${getAudioFileExtension(blob.type || mediaMimeType)}`,
+  });
+  showSuccess("Hlasová poznámka připravena k odeslání.");
+  finishRecording();
+}
+
+async function startAudioRecording() {
+  if (!supportsMediaRecording()) {
+    showError("Nahrávání zvuku není v tomto zařízení podporováno.");
+    return;
+  }
+
+  discardNote({ keepMessages: true });
+  document.getElementById("transcript").readOnly = true;
+  document.getElementById("section-error").classList.add("hidden");
+
+  try {
+    const permissionGranted = await ensureMicrophonePermission();
+    if (!permissionGranted) {
+      showError("Přístup k mikrofonu byl zamítnut. Povol oprávnění v nastavení aplikace.");
+      document.getElementById("transcript").readOnly = false;
+      return;
+    }
+
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaMimeType = pickSupportedAudioMimeType();
+    mediaChunks = [];
+    audioRecordingStartedAt = Date.now();
+
+    mediaRecorder = mediaMimeType
+      ? new MediaRecorder(mediaStream, { mimeType: mediaMimeType })
+      : new MediaRecorder(mediaStream);
+
+    mediaRecorder.addEventListener("dataavailable", (event) => {
+      if (event.data && event.data.size > 0) {
+        mediaChunks.push(event.data);
+      }
+    });
+
+    mediaRecorder.addEventListener("stop", () => {
+      finalizeAudioRecording().catch((error) => {
+        console.error("Finalizace audio záznamu selhala:", error);
+        showError("Nepodařilo se dokončit hlasovou poznámku.");
+        finishRecording();
+      });
+    }, { once: true });
+
+    isRecording = true;
+    activeCaptureMode = "audio";
+    userStoppedRecording = false;
+    setRecordingUI(true);
+
+    mediaRecorder.start();
+    audioStopTimer = setTimeout(() => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+    }, MAX_AUDIO_DURATION_MS);
+  } catch (error) {
+    stopAudioStream();
+    mediaRecorder = null;
+    mediaChunks = [];
+    activeCaptureMode = null;
+    isRecording = false;
+    setRecordingUI(false);
+    if (error && /permission/i.test(error.message || "")) {
+      showError("Přístup k mikrofonu byl zamítnut. Povol oprávnění v nastavení aplikace.");
+    } else {
+      showError("Nelze spustit nahrávání zvuku: " + (error.message || error));
+    }
+  }
+}
+
+async function stopAudioRecording() {
+  if (!mediaRecorder || mediaRecorder.state === "inactive") {
+    finishRecording();
+    return;
+  }
+
+  isRecording = false;
+  userStoppedRecording = true;
+  clearAudioRecordingTimer();
+  mediaRecorder.stop();
+}
+
+// ── Odeslání poznámky ─────────────────────────────────────────────────────────
+async function buildBasePayload() {
   // Aktualizovat baterii
   await refreshBattery();
 
@@ -621,7 +923,7 @@ async function sendNote() {
     const pos = await getPosition();
     lat = pos.coords.latitude;
     lon = pos.coords.longitude;
-    
+
     if (pos.coords.speed !== null && pos.coords.speed >= 0) {
       speed = Math.round(pos.coords.speed * 3.6 * 10) / 10;
     }
@@ -629,45 +931,80 @@ async function sendNote() {
       altitude = Math.round(pos.coords.altitude);
     }
   } catch {
-    // GPS nedostupná — odešleme bez souřadnic
-    showError("GPS nedostupná — poznámka uložena bez polohy.");
+    showError("GPS nedostupná — záznam bude uložen bez polohy.");
   }
 
-  const now = new Date();
-  const payload = {
-    time: now.toISOString(),
+  return {
+    time: new Date().toISOString(),
     lat,
     lon,
-    note,
     battery: batteryLevel,
     speed,
     altitude,
   };
+}
+
+async function sendNote() {
+  if (!WRITE_TOKEN) {
+    showError("Chybí write token v runtime-config.js.");
+    return;
+  }
+
+  const note = document.getElementById("transcript").value.trim();
+  const hasTextNote = Boolean(note);
+  const hasAudioNote = Boolean(pendingAudioNote);
+  if (!hasTextNote && !hasAudioNote) return;
+
+  document.getElementById("btn-send").disabled = true;
+  document.getElementById("btn-send").textContent = "Odesílám…";
 
   try {
+    const basePayload = await buildBasePayload();
+    const payload = hasAudioNote
+      ? {
+          ...basePayload,
+          entry_type: "audio",
+          note: "",
+          audioBlob: pendingAudioNote.blob,
+          audioMime: pendingAudioNote.mimeType,
+          audioDurationSec: pendingAudioNote.durationSec,
+          audioFileName: pendingAudioNote.fileName,
+        }
+      : {
+          ...basePayload,
+          entry_type: "text",
+          note,
+        };
+
     if (isOnline) {
       // Online: pošli přímo, při selhání ulož do fronty
       try {
         await directPost(payload);
-        showSuccess("Odesláno!");
+        showSuccess(hasAudioNote ? "Hlasová poznámka odeslána!" : "Odesláno!");
       } catch (postError) {
         if (postError && (postError.code === "UNAUTHORIZED" || postError.code === "CONFIG")) {
           throw postError;
         }
         console.log("Přímé odeslání selhalo, ukládám do fronty:", postError);
+        
+        if (hasAudioNote) {
+           alert("DETAIL CHYBY:\n" + (postError.message || postError) + "\n" + (postError.stack || ""));
+        }
+        
         await enqueue(payload);
-        showSuccess("Odeslání selhalo, zkusí se znovu automaticky.");
+        showSuccess(hasAudioNote
+          ? "Audio se teď nepodařilo odeslat, zkusí se znovu automaticky."
+          : "Odeslání selhalo, zkusí se znovu automaticky.");
       }
     } else {
       // Offline: ulož do fronty
       await enqueue(payload);
-      showSuccess("Offline — odešle se automaticky při signálu.");
+      showSuccess(hasAudioNote
+        ? "Offline — hlasová poznámka se odešle automaticky při signálu."
+        : "Offline — odešle se automaticky při signálu.");
     }
 
-    document.getElementById("transcript").value = "";
-    autoResize();
-    document.getElementById("section-confirm").classList.add("hidden");
-    currentTranscript = "";
+    discardNote({ keepMessages: true });
     await updateStatus();
   } catch (e) {
     showError("Chyba při ukládání: " + e.message);
@@ -684,17 +1021,21 @@ async function directPost(payload, url = SHEET_URL) {
     throw error;
   }
 
+  const postBody = await serializePayloadForPost(payload);
   const res = await fetch(url, {
     method: "POST",
     body: JSON.stringify({
-      ...payload,
+      ...postBody,
       token: WRITE_TOKEN,
     }),
     // bez Content-Type → "text/plain" → simple request → žádný CORS preflight
   });
 
   const text = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    console.error("HTTP chyba při odesílání na server:", res.status, text);
+    throw new Error(`HTTP ${res.status}`);
+  }
 
   if (!text) return;
 
@@ -713,11 +1054,16 @@ async function directPost(payload, url = SHEET_URL) {
   }
 }
 
-function discardNote() {
+function discardNote(options = {}) {
   document.getElementById("transcript").value = "";
   autoResize();
   document.getElementById("section-confirm").classList.add("hidden");
   currentTranscript = "";
+  clearPendingAudioPreview();
+  if (!options.keepMessages) {
+    document.getElementById("section-error").classList.add("hidden");
+    document.getElementById("section-success").classList.add("hidden");
+  }
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
@@ -733,26 +1079,45 @@ function showError(msg) {
   const el = document.getElementById("section-error");
   el.textContent = msg;
   el.classList.remove("hidden");
+  document.getElementById("section-success").classList.add("hidden");
 }
 
 function showSuccess(msg) {
   const el = document.getElementById("section-success");
   el.textContent = msg;
   el.classList.remove("hidden");
+  document.getElementById("section-error").classList.add("hidden");
   setTimeout(() => el.classList.add("hidden"), 3000);
 }
 
-function configureMapLink() {
-  const link = document.querySelector('footer a[href="./index.html"], footer a[href="./map.html"]');
-  if (!link) return;
-
-  if (!READ_TOKEN) {
-    return;
+function getMapPageHref() {
+  const path = window.location.pathname || "";
+  if (path.endsWith("/index.html") || path.endsWith("\\index.html")) {
+    return "./map.html";
   }
+  return "./index.html";
+}
 
-  const href = link.getAttribute("href") || "./index.html";
-  const baseHref = href.split("#")[0];
-  link.setAttribute("href", `${baseHref}#token=${encodeURIComponent(READ_TOKEN)}`);
+function getMapLinkTarget() {
+  const baseHref = getMapPageHref();
+  if (!READ_TOKEN) {
+    return baseHref;
+  }
+  return `${baseHref}#token=${encodeURIComponent(READ_TOKEN)}`;
+}
+
+function configureMapLinks() {
+  const links = document.querySelectorAll("[data-map-link]");
+  if (!links.length) return;
+
+  links.forEach((link) => {
+    const target = getMapLinkTarget();
+    link.setAttribute("href", target);
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      window.location.assign(target);
+    });
+  });
 }
 
 async function updateStatus() {
@@ -776,7 +1141,7 @@ async function init() {
   await initBattery();
   await initSpeech();
   await updateStatus();
-  configureMapLink();
+  configureMapLinks();
 
   // Pokus o flush fronty při startu (pokud jsme online)
   if (isOnline) {
@@ -784,11 +1149,20 @@ async function init() {
   }
 
   // Tlačítka
+  setRecordingUI(false);
   document.getElementById("btn-record").addEventListener("click", async () => {
     if (isRecording) {
       await stopRecording();
     } else {
       await startRecording();
+    }
+  });
+
+  document.getElementById("btn-audio").addEventListener("click", async () => {
+    if (isRecording && activeCaptureMode === "audio") {
+      await stopAudioRecording();
+    } else if (!isRecording) {
+      await startAudioRecording();
     }
   });
 

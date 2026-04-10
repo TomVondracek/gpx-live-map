@@ -15,6 +15,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.util.ArrayList;
 import java.util.Locale;
@@ -57,6 +58,25 @@ public class GoogleSTTPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("available", available);
         call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void checkMicrophonePermission(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("granted", hasPermission(Manifest.permission.RECORD_AUDIO));
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestMicrophonePermission(PluginCall call) {
+        if (hasPermission(Manifest.permission.RECORD_AUDIO)) {
+            JSObject ret = new JSObject();
+            ret.put("granted", true);
+            call.resolve(ret);
+            return;
+        }
+
+        requestPermissionForAlias("microphone", call, "microphonePermissionCallback");
     }
 
     // ── Nahrávání ────────────────────────────────────────────────────────────
@@ -146,6 +166,15 @@ public class GoogleSTTPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("stopped", true);
         call.resolve(ret);
+    }
+
+    @PermissionCallback
+    private void microphonePermissionCallback(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("granted", hasPermission(Manifest.permission.RECORD_AUDIO));
+        if (call != null) {
+            call.resolve(ret);
+        }
     }
 
     // ── RecognitionListener ──────────────────────────────────────────────────
