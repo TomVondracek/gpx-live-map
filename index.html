@@ -745,7 +745,7 @@ function buildPopupContent(point, weatherLine, metaParts) {
     wrapper.appendChild(createAudioPlayControl(point));
   } else if (entryType === "photo") {
     const img = document.createElement("img");
-    img.src = `https://drive.google.com/uc?id=${point.photo_file_id}`;
+    img.src = `https://drive.google.com/thumbnail?id=${point.photo_file_id}&sz=w800`;
     img.style.width = "100%";
     img.style.maxWidth = "240px";
     img.style.borderRadius = "8px";
@@ -844,7 +844,7 @@ function renderNotesList(validPoints) {
       item.appendChild(createAudioPlayControl(point, { compact: true }));
     } else if (entryType === "photo") {
       const img = document.createElement("img");
-      img.src = `https://drive.google.com/uc?id=${point.photo_file_id}`;
+      img.src = `https://drive.google.com/thumbnail?id=${point.photo_file_id}&sz=w800`;
       img.style.width = "100%";
       img.style.maxHeight = "120px";
       img.style.objectFit = "cover";

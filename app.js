@@ -35,8 +35,6 @@ let pendingAudioObjectUrl = "";
 let audioStopTimer = null;
 let audioDurationInterval = null;
 let audioRecordingStartedAt = 0;
-let pendingAudioNote = null;
-let pendingAudioObjectUrl = "";
 
 function normalizeTranscriptWhitespace(text) {
   return String(text || "")
@@ -741,6 +739,9 @@ function finishRecording() {
   const text = transcript.value.trim();
   if (text || pendingAudioNote) {
     document.getElementById("section-confirm").classList.remove("hidden");
+  } else {
+    // Pokud nic nebylo nadiktováno a není nahráno audio, rovnou schováme
+    transcript.classList.add("hidden");
   }
 }
 
@@ -762,7 +763,7 @@ function setRecordingUI(active) {
     indicator.classList.remove("hidden");
     label.textContent = "Nahrávám diktování";
   } else if (active && activeCaptureMode === "audio") {
-    btn.textContent = "MLUVIT";
+    btn.textContent = "TEXT";
     btn.classList.remove("recording");
     btn.disabled = true;
     audioBtn.textContent = "STOP";
@@ -772,7 +773,7 @@ function setRecordingUI(active) {
     indicator.classList.remove("hidden");
     label.textContent = "Nahrávám hlasovou poznámku";
   } else {
-    btn.textContent = "MLUVIT";
+    btn.textContent = "TEXT";
     btn.classList.remove("recording");
     btn.disabled = !chooseEngine();
     audioBtn.textContent = "ZVUK";
@@ -1091,7 +1092,7 @@ async function directPost(payload, url = SHEET_URL) {
 
 function discardNote(options = {}) {
   document.getElementById("transcript").value = "";
-  document.getElementById("transcript").classList.remove("hidden");
+  document.getElementById("transcript").classList.add("hidden");
   autoResize();
   document.getElementById("section-confirm").classList.add("hidden");
   currentTranscript = "";

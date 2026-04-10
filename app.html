@@ -152,21 +152,26 @@
     }
 
     #capture-actions {
-      display: flex;
-      gap: 14px;
-      width: 100%;
-      max-width: 480px;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px 24px;
+      width: fit-content;
+      margin: 0 auto;
+      justify-items: center;
+    }
+
+    #btn-record {
+      grid-column: 1 / -1; /* Roztáhne se přes oba sloupce (bude nahoře uprostřed) */
     }
 
     .capture-btn {
-      width: min(28vw, 110px);
-      height: min(28vw, 110px);
+      width: min(36vw, 136px);
+      height: min(36vw, 136px);
       border-radius: 50%;
       border: 3px solid var(--border);
       background: rgba(255, 255, 255, 0.05);
       color: var(--text);
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       font-weight: 700;
       letter-spacing: 0.1em;
       cursor: pointer;
@@ -532,12 +537,12 @@
     </div>
 
     <div id="capture-actions">
-      <button id="btn-record" class="capture-btn">MLUVIT</button>
+      <button id="btn-record" class="capture-btn">TEXT</button>
       <button id="btn-audio" class="capture-btn">ZVUK</button>
       <button id="btn-photo" class="capture-btn">FOTO</button>
     </div>
 
-    <textarea id="transcript" placeholder="Přepis se zobrazí zde…" readonly rows="2"></textarea>
+    <textarea id="transcript" class="hidden" placeholder="Přepis se zobrazí zde…" readonly rows="2"></textarea>
 
     <section id="audio-preview" class="hidden" aria-label="Náhled hlasové poznámky">
       <div id="audio-preview-header">
