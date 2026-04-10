@@ -233,6 +233,12 @@
       min-width: 220px;
     }
 
+    .popup-audio .note-audio-button {
+      background: #0f0f1a;
+      color: #f6d98f;
+      border: 1px solid #0f0f1a;
+    }
+
     .popup-audio audio {
       width: 100%;
     }
@@ -731,9 +737,6 @@ function buildPopupContent(point, weatherLine, metaParts) {
   wrapper.appendChild(document.createElement("br"));
 
   if (getEntryType(point) === "audio") {
-    const label = document.createElement("div");
-    label.textContent = "Hlasová poznámka";
-    wrapper.appendChild(label);
     wrapper.appendChild(createAudioPlayControl(point));
   } else {
     const note = document.createElement("div");
@@ -933,6 +936,12 @@ map.on("click", () => {
 
 // ── Načítání dat ─────────────────────────────────────────────────────────────
 async function loadData() {
+  // Pokud aktuálně hraje nějaké audio, přeskočíme aktualizaci mapy, aby se nepřerušilo přehrávání.
+  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some(audio => !audio.paused && !audio.ended);
+  if (isAudioPlaying) {
+    return;
+  }
+
   isRefreshingMarkers = true;
   try {
     const dataUrl = getSheetDataUrl();

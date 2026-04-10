@@ -40,9 +40,13 @@ let userStoppedRecording = false; // true = uživatel stiskl STOP → neprovád�
 let activeCaptureMode = null;     // "speech" | "audio" | null
 let mediaRecorder = null;
 let mediaStream = null;
+let mediaRecorder = null;
 let mediaChunks = [];
-let mediaMimeType = "";
+let audioRecordingStartedAt = 0;
+let pendingAudioNote = null;
+let pendingAudioObjectUrl = "";
 let audioStopTimer = null;
+let audioDurationInterval = null;
 let audioRecordingStartedAt = 0;
 let pendingAudioNote = null;
 let pendingAudioObjectUrl = "";
@@ -212,7 +216,7 @@ function showAudioPreview(audioNote) {
 
   player.src = pendingAudioObjectUrl;
   player.load();
-  meta.textContent = `${formatAudioDuration(audioNote.durationSec)} · ${audioNote.mimeType || "audio"}`;
+  meta.textContent = `Délka: ${formatAudioDuration(audioNote.durationSec)}`;
   preview.classList.remove("hidden");
 }
 
@@ -668,6 +672,7 @@ async function startRecording() {
   discardNote({ keepMessages: true });
   currentTranscript = "";
   const transcript = document.getElementById("transcript");
+  transcript.classList.remove("hidden");
   transcript.readOnly = true;
   document.getElementById("section-error").classList.add("hidden");
 
@@ -791,6 +796,10 @@ function clearAudioRecordingTimer() {
     clearTimeout(audioStopTimer);
     audioStopTimer = null;
   }
+  if (audioDurationInterval) {
+    clearInterval(audioDurationInterval);
+    audioDurationInterval = null;
+  }
 }
 
 async function finalizeAudioRecording() {
@@ -838,6 +847,7 @@ async function startAudioRecording() {
 
   discardNote({ keepMessages: true });
   document.getElementById("transcript").readOnly = true;
+  document.getElementById("transcript").classList.add("hidden");
   document.getElementById("section-error").classList.add("hidden");
 
   try {
@@ -877,6 +887,14 @@ async function startAudioRecording() {
     setRecordingUI(true);
 
     mediaRecorder.start();
+    audioDurationInterval = setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - audioRecordingStartedAt) / 1000);
+      const label = document.getElementById("recording-label");
+      if (label) {
+        label.textContent = `Nahrávám hlasovou poznámku (${formatAudioDuration(elapsedSec)})`;
+      }
+    }, 1000);
+
     audioStopTimer = setTimeout(() => {
       if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
@@ -1056,6 +1074,7 @@ async function directPost(payload, url = SHEET_URL) {
 
 function discardNote(options = {}) {
   document.getElementById("transcript").value = "";
+  document.getElementById("transcript").classList.remove("hidden");
   autoResize();
   document.getElementById("section-confirm").classList.add("hidden");
   currentTranscript = "";

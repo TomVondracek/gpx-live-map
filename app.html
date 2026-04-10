@@ -213,23 +213,21 @@
     /* ── Přepis textu ── */
     #transcript {
       width: 100%;
-      max-width: 480px;
       min-height: 80px;
       max-height: 40vh;
-      background: var(--bg2);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 14px 16px;
-      font-size: 1.05rem;
+      font-size: 1rem;
       line-height: 1.5;
+      resize: vertical;
+      background: rgba(255, 255, 255, 0.03);
       color: var(--text);
-      font-family: inherit;
-      border: 1px solid var(--border);
-      outline: none;
-      resize: none;
-      overflow-y: auto;
-      field-sizing: content;
-      word-break: break-word;
       transition: border-color 0.2s;
+    }
+
+    #transcript.hidden {
+      display: none;
     }
 
     #transcript::placeholder {
@@ -469,7 +467,7 @@
       opacity: 1;
     }
 
-    @media (min-width: 769px) {
+    @media (min-width: 769px) and (pointer: fine) {
       #status-bar,
       main,
       footer {
@@ -517,7 +515,7 @@
       <audio id="audio-player" controls preload="metadata"></audio>
     </section>
 
-    <details id="diagnostics">
+    <details id="diagnostics" style="display: none;">
       <summary>Diagnostika STT</summary>
       <div id="diagnostics-body">
         <div class="diag-row">
