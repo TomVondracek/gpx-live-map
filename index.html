@@ -601,7 +601,9 @@ function formatAudioDuration(durationSec) {
 }
 
 function getEntryType(point) {
-  return point.entry_type === "audio" ? "audio" : "text";
+  if (point.entry_type === "audio" || point.audio_file_id) return "audio";
+  if (point.entry_type === "photo" || point.photo_file_id) return "photo";
+  return "text";
 }
 
 function getPointKey(point) {
@@ -611,7 +613,8 @@ function getPointKey(point) {
     point.lon ?? "",
     point.note ?? "",
     point.entry_type ?? "",
-    point.audio_file_id ?? ""
+    point.audio_file_id ?? "",
+    point.photo_file_id ?? ""
   ].join("|");
 }
 
@@ -736,8 +739,24 @@ function buildPopupContent(point, weatherLine, metaParts) {
 
   wrapper.appendChild(document.createElement("br"));
 
-  if (getEntryType(point) === "audio") {
+  const entryType = getEntryType(point);
+
+  if (entryType === "audio") {
     wrapper.appendChild(createAudioPlayControl(point));
+  } else if (entryType === "photo") {
+    const img = document.createElement("img");
+    img.src = `https://drive.google.com/uc?id=${point.photo_file_id}`;
+    img.style.width = "100%";
+    img.style.maxWidth = "240px";
+    img.style.borderRadius = "8px";
+    img.style.marginTop = "8px";
+    img.style.objectFit = "contain";
+    
+    // Zobrazení plné velikosti po kliknutí
+    img.style.cursor = "pointer";
+    img.onclick = () => window.open(img.src, "_blank");
+
+    wrapper.appendChild(img);
   } else {
     const note = document.createElement("div");
     note.textContent = point.note ?? "";
@@ -810,6 +829,9 @@ function renderNotesList(validPoints) {
     if (entryType === "audio") {
       textEl.className = "note-text audio";
       textEl.textContent = "▶ Hlasová poznámka";
+    } else if (entryType === "photo") {
+      textEl.className = "note-text photo";
+      textEl.textContent = "📷 Fotografie";
     } else {
       textEl.className = "note-text" + (noteText ? "" : " empty");
       textEl.textContent = noteText || "bez textu";
@@ -820,6 +842,15 @@ function renderNotesList(validPoints) {
 
     if (entryType === "audio") {
       item.appendChild(createAudioPlayControl(point, { compact: true }));
+    } else if (entryType === "photo") {
+      const img = document.createElement("img");
+      img.src = `https://drive.google.com/uc?id=${point.photo_file_id}`;
+      img.style.width = "100%";
+      img.style.maxHeight = "120px";
+      img.style.objectFit = "cover";
+      img.style.borderRadius = "6px";
+      img.style.marginTop = "6px";
+      item.appendChild(img);
     }
 
     // Meta info (speed, alt, weather, km)

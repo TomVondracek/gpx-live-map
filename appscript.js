@@ -12,6 +12,7 @@ const SHEET_HEADERS_ = [
   "audio_file_id",
   "audio_mime",
   "audio_duration_sec",
+  "photo_file_id",
 ];
 
 function jsonOutput_(payload) {
@@ -124,9 +125,23 @@ function createAudioFile_(data) {
   return resolveAudioFolder_().createFile(blob);
 }
 
+function createPhotoFile_(data) {
+  if (!data.photo_base64) {
+    throw new Error("missing_photo_data");
+  }
+
+  const mimeType = String(data.photo_mime || "image/jpeg");
+  const bytes = Utilities.base64Decode(data.photo_base64);
+  const safeTimestamp = String(data.time || new Date().toISOString()).replace(/[^\dTZ-]/g, "");
+  const fileName = `foto-poznamka-${safeTimestamp}.jpg`;
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+  return resolveAudioFolder_().createFile(blob);
+}
+
 function entryTypeFromRow_(row) {
   if (row[9]) return String(row[9]);
   if (row[10]) return "audio";
+  if (row[13]) return "photo";
   return "text";
 }
 
@@ -191,23 +206,31 @@ function doPost(e) {
     ensureHeaders_(sheet);
 
     const weather = getWeatherSnapshot_(data);
-    const entryType = String(data.entry_type || "text") === "audio" ? "audio" : "text";
+    let entryType = "text";
+    if (String(data.entry_type) === "audio") entryType = "audio";
+    else if (String(data.entry_type) === "photo") entryType = "photo";
 
     let audioFileId = "";
     let audioMime = "";
     let audioDurationSec = "";
+    let photoFileId = "";
+
     if (entryType === "audio") {
       const audioFile = createAudioFile_(data);
       audioFileId = audioFile.getId();
       audioMime = String(data.audio_mime || audioFile.getMimeType() || "");
       audioDurationSec = data.audio_duration_sec != null ? data.audio_duration_sec : "";
+    } else if (entryType === "photo") {
+      const photoFile = createPhotoFile_(data);
+      photoFileId = photoFile.getId();
+      photoFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     }
 
     sheet.appendRow([
       data.time || new Date().toISOString(),
       data.lat != null ? data.lat : "",
       data.lon != null ? data.lon : "",
-      entryType === "audio" ? "" : neutralizeSpreadsheetFormula_(data.note),
+      (entryType === "audio" || entryType === "photo") ? "" : neutralizeSpreadsheetFormula_(data.note),
       data.battery ?? "",
       data.speed ?? "",
       data.altitude ?? "",
@@ -217,6 +240,7 @@ function doPost(e) {
       audioFileId,
       audioMime,
       audioDurationSec,
+      photoFileId,
     ]);
 
     return jsonOutput_({ ok: true, entryType, audioFileId });
@@ -257,6 +281,7 @@ function doGet(e) {
       audio_file_id: row[10] || "",
       audio_mime: row[11] || "",
       audio_duration_sec: parseFloatOrNull_(row[12]),
+      photo_file_id: row[13] || "",
     }));
 
     return jsonOutput_(result);

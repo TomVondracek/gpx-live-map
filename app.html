@@ -160,13 +160,13 @@
     }
 
     .capture-btn {
-      width: min(42vw, 160px);
-      height: min(42vw, 160px);
+      width: min(28vw, 110px);
+      height: min(28vw, 110px);
       border-radius: 50%;
       border: 3px solid var(--border);
       background: rgba(255, 255, 255, 0.05);
       color: var(--text);
-      font-size: 1.1rem;
+      font-size: 0.95rem;
       font-weight: 700;
       letter-spacing: 0.1em;
       cursor: pointer;
@@ -202,6 +202,13 @@
       background: #e9c46a;
       color: #241700;
       box-shadow: 0 0 28px 8px rgba(233, 196, 106, 0.4);
+    }
+
+    #btn-photo {
+      border-color: rgba(69, 123, 157, 0.5);
+      background: rgba(69, 123, 157, 0.12);
+      color: #8ecae6;
+      box-shadow: 0 0 12px 2px rgba(69, 123, 157, 0.14);
     }
 
     .capture-btn:disabled {
@@ -281,6 +288,30 @@
 
     #audio-player {
       width: 100%;
+    }
+
+    #photo-preview {
+      width: 100%;
+      max-width: 480px;
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #photo-preview.hidden {
+      display: none;
+    }
+
+    #photo-preview-img {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      object-fit: contain;
     }
 
     /* ── Diagnostika STT ── */
@@ -503,6 +534,7 @@
     <div id="capture-actions">
       <button id="btn-record" class="capture-btn">MLUVIT</button>
       <button id="btn-audio" class="capture-btn">ZVUK</button>
+      <button id="btn-photo" class="capture-btn">FOTO</button>
     </div>
 
     <textarea id="transcript" placeholder="Přepis se zobrazí zde…" readonly rows="2"></textarea>
@@ -513,6 +545,10 @@
         <span id="audio-preview-meta">čekám na nahrávku…</span>
       </div>
       <audio id="audio-player" controls preload="metadata"></audio>
+    </section>
+
+    <section id="photo-preview" class="hidden" aria-label="Náhled fotografie">
+      <img id="photo-preview-img" alt="Zatím žádná fotka" />
     </section>
 
     <details id="diagnostics" style="display: none;">

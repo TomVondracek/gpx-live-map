@@ -28,22 +28,9 @@ function getCapacitorPlugin(name) {
 
 // ── Stav aplikace ────────────────────────────────────────────────────────────
 let isRecording = false;
-let currentTranscript = "";
-let batteryLevel = null;
-let isOnline = true;
-let voskReady = false;
-let voskLoading = false;
-let isFlushing = false;
-let googleSttAvailable = false;  // zda je Google STT k dispozici na zařízení
-let activeEngine = null;          // "google" | "vosk" | null — který engine právě nahrává
-let userStoppedRecording = false; // true = uživatel stiskl STOP → neprovádět auto-restart
-let activeCaptureMode = null;     // "speech" | "audio" | null
-let mediaRecorder = null;
-let mediaStream = null;
-let mediaRecorder = null;
-let mediaChunks = [];
-let audioRecordingStartedAt = 0;
+let userStoppedRecording = false;
 let pendingAudioNote = null;
+let pendingPhoto = null;
 let pendingAudioObjectUrl = "";
 let audioStopTimer = null;
 let audioDurationInterval = null;
@@ -183,9 +170,8 @@ function getAudioFileExtension(mimeType) {
 function clearPendingAudioPreview() {
   if (pendingAudioObjectUrl) {
     URL.revokeObjectURL(pendingAudioObjectUrl);
-    pendingAudioObjectUrl = "";
+    pendingAudioObjectUrl = null;
   }
-
   pendingAudioNote = null;
 
   const preview = document.getElementById("audio-preview");
@@ -201,6 +187,16 @@ function clearPendingAudioPreview() {
   }
   if (preview) {
     preview.classList.add("hidden");
+  }
+}
+
+function clearPendingPhotoPreview() {
+  pendingPhoto = null;
+  const container = document.getElementById("photo-preview");
+  const img = document.getElementById("photo-preview-img");
+  if (container && img) {
+    img.src = "";
+    container.classList.add("hidden");
   }
 }
 
@@ -751,6 +747,7 @@ function finishRecording() {
 function setRecordingUI(active) {
   const btn = document.getElementById("btn-record");
   const audioBtn = document.getElementById("btn-audio");
+  const photoBtn = document.getElementById("btn-photo");
   const indicator = document.getElementById("recording-indicator");
   const label = document.getElementById("recording-label");
 
@@ -761,6 +758,7 @@ function setRecordingUI(active) {
     audioBtn.textContent = "ZVUK";
     audioBtn.classList.remove("recording");
     audioBtn.disabled = true;
+    photoBtn.disabled = true;
     indicator.classList.remove("hidden");
     label.textContent = "Nahrávám diktování";
   } else if (active && activeCaptureMode === "audio") {
@@ -770,6 +768,7 @@ function setRecordingUI(active) {
     audioBtn.textContent = "STOP";
     audioBtn.classList.add("recording");
     audioBtn.disabled = false;
+    photoBtn.disabled = true;
     indicator.classList.remove("hidden");
     label.textContent = "Nahrávám hlasovou poznámku";
   } else {
@@ -779,6 +778,7 @@ function setRecordingUI(active) {
     audioBtn.textContent = "ZVUK";
     audioBtn.classList.remove("recording");
     audioBtn.disabled = !supportsMediaRecording();
+    photoBtn.disabled = false;
     indicator.classList.add("hidden");
     label.textContent = "Nahrávám";
   }
@@ -971,34 +971,51 @@ async function sendNote() {
   const note = document.getElementById("transcript").value.trim();
   const hasTextNote = Boolean(note);
   const hasAudioNote = Boolean(pendingAudioNote);
-  if (!hasTextNote && !hasAudioNote) return;
+  const hasPhotoNote = Boolean(pendingPhoto);
+  if (!hasTextNote && !hasAudioNote && !hasPhotoNote) return;
 
   document.getElementById("btn-send").disabled = true;
   document.getElementById("btn-send").textContent = "Odesílám…";
 
   try {
     const basePayload = await buildBasePayload();
-    const payload = hasAudioNote
-      ? {
-          ...basePayload,
-          entry_type: "audio",
-          note: "",
-          audioBlob: pendingAudioNote.blob,
-          audioMime: pendingAudioNote.mimeType,
-          audioDurationSec: pendingAudioNote.durationSec,
-          audioFileName: pendingAudioNote.fileName,
-        }
-      : {
-          ...basePayload,
-          entry_type: "text",
-          note,
-        };
+    let payload;
+    
+    if (hasPhotoNote) {
+      payload = {
+        ...basePayload,
+        entry_type: "photo",
+        note: "",
+        photo_base64: pendingPhoto.base64,
+        photo_mime: pendingPhoto.mimeType,
+      };
+    } else if (hasAudioNote) {
+      payload = {
+        ...basePayload,
+        entry_type: "audio",
+        note: "",
+        audioBlob: pendingAudioNote.blob,
+        audioMime: pendingAudioNote.mimeType,
+        audioDurationSec: pendingAudioNote.durationSec,
+        audioFileName: pendingAudioNote.fileName,
+      };
+    } else {
+      payload = {
+        ...basePayload,
+        entry_type: "text",
+        note,
+      };
+    }
 
     if (isOnline) {
       // Online: pošli přímo, při selhání ulož do fronty
       try {
         await directPost(payload);
-        showSuccess(hasAudioNote ? "Hlasová poznámka odeslána!" : "Odesláno!");
+        if (hasPhotoNote) {
+          showSuccess("Fotka odeslána!");
+        } else {
+          showSuccess(hasAudioNote ? "Hlasová poznámka odeslána!" : "Odesláno!");
+        }
       } catch (postError) {
         if (postError && (postError.code === "UNAUTHORIZED" || postError.code === "CONFIG")) {
           throw postError;
@@ -1079,6 +1096,7 @@ function discardNote(options = {}) {
   document.getElementById("section-confirm").classList.add("hidden");
   currentTranscript = "";
   clearPendingAudioPreview();
+  clearPendingPhotoPreview();
   if (!options.keepMessages) {
     document.getElementById("section-error").classList.add("hidden");
     document.getElementById("section-success").classList.add("hidden");
@@ -1153,6 +1171,53 @@ async function updateStatus() {
   updateDiagnostics();
 }
 
+// ── Foto záznam ──────────────────────────────────────────────────────────────
+async function takePhoto() {
+  const Camera = getCapacitorPlugin("Camera");
+  if (!Camera) {
+    return showError("Fotoaparát není dostupný.");
+  }
+
+  try {
+    const image = await Camera.getPhoto({
+      quality: 60,
+      allowEditing: false,
+      resultType: "base64",
+      saveToGallery: true,
+      width: 1200,
+      source: "CAMERA"
+    });
+
+    discardNote({ keepMessages: true });
+
+    pendingPhoto = {
+      base64: image.base64String,
+      mimeType: `image/${image.format || 'jpeg'}`
+    };
+
+    // Zobrazení náhledu
+    const container = document.getElementById("photo-preview");
+    const img = document.getElementById("photo-preview-img");
+    img.src = `data:${pendingPhoto.mimeType};base64,${pendingPhoto.base64}`;
+    container.classList.remove("hidden");
+
+    // Skrýt textový přepis a audio
+    document.getElementById("transcript").classList.add("hidden");
+    document.getElementById("audio-preview").classList.add("hidden");
+
+    // Zobrazit potvrzovací tlačítka
+    document.getElementById("section-confirm").classList.remove("hidden");
+
+  } catch (error) {
+    if (error.message && error.message.includes("User cancelled")) {
+      // Uživatel jen zavřel foťák
+      return;
+    }
+    console.error("Chyba při focení:", error);
+    showError("Nepodařilo se pořídit fotku.");
+  }
+}
+
 // ── Inicializace ──────────────────────────────────────────────────────────────
 async function init() {
   // Inicializace Capacitor pluginů
@@ -1182,6 +1247,12 @@ async function init() {
       await stopAudioRecording();
     } else if (!isRecording) {
       await startAudioRecording();
+    }
+  });
+
+  document.getElementById("btn-photo").addEventListener("click", async () => {
+    if (!isRecording) {
+      await takePhoto();
     }
   });
 
