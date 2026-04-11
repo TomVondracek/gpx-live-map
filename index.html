@@ -5,6 +5,9 @@
   <title>UltraLog – mapa</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+  <!-- Favicon – stejný design jako ikona aplikace -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='t' x1='0%25' y1='100%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%233b82f6'/%3E%3Cstop offset='100%25' stop-color='%2386efac'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%230f0f1a'/%3E%3Cpath d='M15 46 C18 42 21 39 24 37 C28 34 31 32 35 29 C39 27 42 24 45 22 C47 20 48 19 49 16' fill='none' stroke='url(%23t)' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='37' r='2.5' fill='%2322d3ee'/%3E%3Ccircle cx='35' cy='29' r='2.5' fill='%2322d3ee'/%3E%3Ccircle cx='49' cy='16' r='3.5' fill='%2386efac'/%3E%3Ccircle cx='49' cy='16' r='1.5' fill='%230f0f1a'/%3E%3Cpath d='M16 51 Q18 49 20 51 Q22 53 24 51 Q26 49 28 51 Q30 53 32 51 Q34 49 36 51 Q38 53 40 51 Q42 49 44 51 Q46 52 48 51' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' opacity='0.6'/%3E%3C/svg%3E">
+
   <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
   <script src="./vendor/leaflet/leaflet.js"></script>
   <script src="./vendor/leaflet-gpx/gpx.min.js"></script>
@@ -349,7 +352,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      cursor: zoom-out;
+      cursor: pointer;
     }
 
     #lightbox.open {
@@ -456,10 +459,7 @@ let isRefreshingMarkers = false;
     lbImg.onload = () => { lbImg.style.opacity = "1"; };
     lbImg.src = fullSrc;
 
-    const parts = [];
-    if (point.time) parts.push(formatTime(point.time));
-    if (point.lat && point.lon) parts.push(`${Number(point.lat).toFixed(5)}, ${Number(point.lon).toFixed(5)}`);
-    lbCapt.textContent = parts.join("  ·  ");
+    lbCapt.textContent = point.time ? formatTime(point.time) : "";
 
     lb.classList.add("open");
     document.addEventListener("keydown", onKey);
@@ -858,7 +858,7 @@ function buildPopupContent(point, weatherLine, metaParts) {
     img.style.objectFit = "contain";
     
     // Zobrazení plné velikosti po kliknutí — otevře lightbox
-    img.style.cursor = "zoom-in";
+    img.style.cursor = "pointer";
     img.onclick = (e) => { e.stopPropagation(); window.openLightbox(point); };
 
     wrapper.appendChild(img);
@@ -955,7 +955,7 @@ function renderNotesList(validPoints) {
       img.style.objectFit = "cover";
       img.style.borderRadius = "6px";
       img.style.marginTop = "6px";
-      img.style.cursor = "zoom-in";
+      img.style.cursor = "pointer";
       img.onclick = (e) => { e.stopPropagation(); window.openLightbox(point); };
       item.appendChild(img);
     }
