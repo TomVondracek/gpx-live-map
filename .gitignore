@@ -19,6 +19,7 @@ www/
 # Gradle build output (keep android/ source in git, ignore build artifacts)
 android/app/build/
 android/.gradle/
+/.gradle/
 android/build/
 android/capacitor-cordova-android-plugins/build/
 android/app/src/main/assets/capacitorassets/

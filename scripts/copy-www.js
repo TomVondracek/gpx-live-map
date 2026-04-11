@@ -53,6 +53,13 @@ if (fs.existsSync(appJs)) {
   console.log("  app.js -> www/app.js");
 }
 
+// app/ → www/app/ (rozsekané mobilní moduly)
+const appDir = path.join(ROOT, "app");
+if (fs.existsSync(appDir)) {
+  copyDirRecursive(appDir, path.join(WWW, "app"));
+  console.log("  app -> www/app");
+}
+
 // sw.js → www/sw.js (Service Worker pro Background Sync)
 const swJs = path.join(ROOT, "sw.js");
 if (fs.existsSync(swJs)) {
