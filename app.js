@@ -1535,9 +1535,13 @@ async function takePhoto() {
 
 // ── Inicializace ──────────────────────────────────────────────────────────────
 async function init() {
-  // Inicializace Capacitor pluginů
-  await initNetwork();
-  await initBattery();
+  // Inicializace Capacitor pluginů + Service Worker souběžně
+  // saveConfigForSW musí proběhnout před první možností enqueue — proto await
+  await Promise.all([
+    initNetwork(),
+    initBattery(),
+    registerServiceWorker().then(() => saveConfigForSW()),
+  ]);
 
   // Zaregistrování tlačítek ihned, aby UI reagovalo i během načítání STT
   setRecordingUI(false);
@@ -1596,10 +1600,6 @@ async function init() {
 
   // Spustit GPS watcher pro průběžnou aktualizaci přesnosti a cache polohy
   startGpsWatch();
-
-  // Service Worker + Background Sync: registrace a uložení tokenu do IDB
-  registerServiceWorker();
-  saveConfigForSW();
 
   // Pojistka: uvolni wake lock při zavření/přepnutí aplikace
   window.addEventListener("beforeunload", () => { allowScreenOff(); stopGpsWatch(); });
