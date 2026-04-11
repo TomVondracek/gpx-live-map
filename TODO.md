@@ -1,17 +1,17 @@
 # Plánovaná vylepšení (TODO)
 
 ## 🏃‍♂️ Ergonomie při běhu (Mobilní UX)
-- [ ] **Haptická odezva (Vibrace)**: přidat `@capacitor/haptics` pro odezvu při stisku tlačítek a událostech (start, stop, odeslání).
-- [ ] **Udržení rozsvíceného displeje (Wake Lock)**: implementovat `@capacitor/keep-awake` během nahrávání.
-- [ ] **Zvuková signalizace (Pípnutí)**: krátké pípnutí při spuštění a automatickém ukončení nahrávání.
+- [x] **Haptická odezva (Vibrace)**: přidat `@capacitor/haptics` pro odezvu při stisku tlačítek a událostech (start, stop, odeslání).
+- [x] **Udržení rozsvíceného displeje (Wake Lock)**: implementováno přes Screen Wake Lock API (`navigator.wakeLock`).
+- [x] **Zvuková signalizace (Pípnutí)**: krátké pípnutí při spuštění a automatickém ukončení nahrávání (Web Audio API).
 
 ## 📶 Spolehlivost a Offline režim
-- [ ] **Správa čekající fronty (Queue UI)**: zobrazení detailů čekajících položek s možností jejich smazání.
-- [ ] **Indikátor kvality GPS**: zobrazení přesnosti polohy (např. v metrech) ve stavovém řádku.
-- [ ] **Background Fetch (Zápis na pozadí)**: odesílání položek z fronty na pozadí při nalezení signálu.
+- [x] **Správa čekající fronty (Queue UI)**: bottom sheet panel se seznamem čekajících položek a možností smazání.
+- [x] **Indikátor kvality GPS**: barevný badge (zelená/žlutá/červená) ve stavovém řádku, kontinuální watchPosition s 10s intervalem, cache GPS fixu pro rychlé odesílání.
+- [x] **Background Fetch (Zápis na pozadí)**: Service Worker s Background Sync API (tag: flush-queue); audio Blob serializován před enqueue; WRITE_TOKEN/SHEET_URL v IDB config store; pojistka visibilitychange→visible.
 
 ## 🗺️ Vylepšení webové mapy (Zobrazení dat)
-- [ ] **Lightbox pro fotky na mapě**: fullscreen galerie pro zobrazení fotek po kliknutí na miniaturu v mapě.
+- [x] **Lightbox pro fotky na mapě**: fullscreen galerie pro zobrazení fotek po kliknutí na miniaturu v mapě.
 - [ ] **Spojnice bodů na mapě**: vizualizace reálného postupu nakreslením čáry mezi zaznamenanými body.
 
 ## 🛠️ Technický dluh a optimalizace
