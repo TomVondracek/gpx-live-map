@@ -338,12 +338,73 @@
         display: block;
       }
     }
+
+    /* ── Lightbox ────────────────────────────────────────────────────────── */
+    #lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.92);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-out;
+    }
+
+    #lightbox.open {
+      display: flex;
+    }
+
+    #lightbox-img {
+      max-width: 96vw;
+      max-height: 88vh;
+      border-radius: 6px;
+      object-fit: contain;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+      cursor: default;
+      transition: opacity 0.2s;
+    }
+
+    #lightbox-caption {
+      margin-top: 12px;
+      color: rgba(255,255,255,0.75);
+      font-size: 13px;
+      text-align: center;
+      max-width: 90vw;
+    }
+
+    #lightbox-close {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.8);
+      font-size: 32px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: color 0.15s;
+    }
+
+    #lightbox-close:hover {
+      color: #fff;
+    }
   </style>
 </head>
 <body>
 
 <div id="map"></div>
 <button id="map-back" type="button" aria-label="Vrátit se na hlavní obrazovku" onclick="window.history.length > 1 ? window.history.back() : (window.location.href = './index.html')">← Zpět</button>
+
+<!-- Lightbox pro fotky -->
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Fotografie v plné velikosti">
+  <button id="lightbox-close" aria-label="Zavřít">×</button>
+  <img id="lightbox-img" src="" alt="Fotografie v plné velikosti" />
+  <div id="lightbox-caption"></div>
+</div>
 
 <!-- Panel zpráv -->
 <div id="notes-panel">
@@ -380,6 +441,50 @@ let gpxPoints = []; // for route matching
 let activePointKey = null;
 let hasShownInitialLatestPopup = false;
 let isRefreshingMarkers = false;
+
+// ── Lightbox ─────────────────────────────────────────────────────────────────
+(function () {
+  const lb       = document.getElementById("lightbox");
+  const lbImg    = document.getElementById("lightbox-img");
+  const lbCapt   = document.getElementById("lightbox-caption");
+  const lbClose  = document.getElementById("lightbox-close");
+
+  function open(point) {
+    const fullSrc = `https://drive.google.com/thumbnail?id=${point.photo_file_id}&sz=w1600`;
+    lbImg.src = "";          // reset, aby se zobrazil loading stav
+    lbImg.style.opacity = "0.4";
+    lbImg.onload = () => { lbImg.style.opacity = "1"; };
+    lbImg.src = fullSrc;
+
+    const parts = [];
+    if (point.time) parts.push(formatTime(point.time));
+    if (point.lat && point.lon) parts.push(`${Number(point.lat).toFixed(5)}, ${Number(point.lon).toFixed(5)}`);
+    lbCapt.textContent = parts.join("  ·  ");
+
+    lb.classList.add("open");
+    document.addEventListener("keydown", onKey);
+  }
+
+  function close() {
+    lb.classList.remove("open");
+    lbImg.src = "";
+    document.removeEventListener("keydown", onKey);
+  }
+
+  function onKey(e) {
+    if (e.key === "Escape") close();
+  }
+
+  // Zavřít kliknutím na backdrop (mimo obrázek)
+  lb.addEventListener("click", (e) => {
+    if (e.target === lb || e.target === lbCapt) close();
+  });
+  lbClose.addEventListener("click", close);
+
+  // Exportovat do globálního scope
+  window.openLightbox  = open;
+  window.closeLightbox = close;
+})();
 
 function readTokenFromLocation() {
   const queryToken = new URLSearchParams(window.location.search).get("token");
@@ -752,9 +857,9 @@ function buildPopupContent(point, weatherLine, metaParts) {
     img.style.marginTop = "8px";
     img.style.objectFit = "contain";
     
-    // Zobrazení plné velikosti po kliknutí
-    img.style.cursor = "pointer";
-    img.onclick = () => window.open(img.src, "_blank");
+    // Zobrazení plné velikosti po kliknutí — otevře lightbox
+    img.style.cursor = "zoom-in";
+    img.onclick = (e) => { e.stopPropagation(); window.openLightbox(point); };
 
     wrapper.appendChild(img);
   } else {
@@ -850,6 +955,8 @@ function renderNotesList(validPoints) {
       img.style.objectFit = "cover";
       img.style.borderRadius = "6px";
       img.style.marginTop = "6px";
+      img.style.cursor = "zoom-in";
+      img.onclick = (e) => { e.stopPropagation(); window.openLightbox(point); };
       item.appendChild(img);
     }
 
