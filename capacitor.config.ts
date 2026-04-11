@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "cz.behpoznamky.app",
-  appName: "Běh – poznámky",
+  appName: "UltraLog",
   webDir: "www",
   android: {
     // Povolit mixed content (HTTP + HTTPS) pro Google Apps Script

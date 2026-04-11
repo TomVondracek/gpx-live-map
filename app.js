@@ -832,12 +832,10 @@ function chooseEngine() {
 }
 
 function getSpeechStatusText() {
-  if (voskLoading) return "STT: načítám Vosk…";
-
+  if (voskLoading) return "Načítám přepis…";
   const engine = chooseEngine();
-  if (engine === "google") return "STT: online (Google)";
-  if (engine === "vosk") return "STT: offline (Vosk)";
-  return "STT: nedostupné";
+  if (engine === "google" || engine === "vosk") return "";
+  return "Přepis nedostupný";
 }
 
 function updateDiagnostics() {
@@ -1029,7 +1027,7 @@ function setRecordingUI(active) {
     audioBtn.disabled = true;
     photoBtn.disabled = true;
     indicator.classList.remove("hidden");
-    label.textContent = "Nahrávám diktování";
+    label.textContent = "Diktování";
   } else if (active && activeCaptureMode === "audio") {
     btn.textContent = "TEXT";
     btn.classList.remove("recording");

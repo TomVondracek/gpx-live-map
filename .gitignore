@@ -35,6 +35,12 @@ local.properties
 *.pid
 *.pid.lock
 
+# Google Drive Service Account credentials — NEVER commit this!
+gdrive-service-account.json
+
+# App icon source (large file, generated locally)
+icon-source.png
+
 # Coverage
 coverage/
 *.lcov
