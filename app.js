@@ -882,6 +882,7 @@ async function stopRecording() {
   }
 
   activeEngine = null;
+  beep("stop");
   finishRecording();
 }
 
@@ -896,7 +897,6 @@ function finishRecording() {
   setRecordingUI(false);
   vibrate("medium");
   allowScreenOff();
-  beep("stop");
 
   const transcript = document.getElementById("transcript");
   transcript.readOnly = false;
@@ -1093,6 +1093,7 @@ async function stopAudioRecording() {
   isRecording = false;
   userStoppedRecording = true;
   clearAudioRecordingTimer();
+  beep("stop");
   mediaRecorder.stop();
 }
 
