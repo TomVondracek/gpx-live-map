@@ -1311,7 +1311,7 @@ async function sendNote() {
         // Serializovat Blob → base64 před uložením (SW/background nemá přístup k Blob)
         const serialized = await serializePayloadForPost(payload);
         await enqueue(serialized);
-        await swSyncRegister();
+        swSyncRegister(); // fire-and-forget — nesmí blokovat UI
         showSuccess(hasAudioNote
           ? "Audio se teď nepodařilo odeslat, zkusí se znovu automaticky."
           : "Odeslání selhalo, zkusí se znovu automaticky.");
@@ -1320,7 +1320,7 @@ async function sendNote() {
       // Offline: serializovat Blob → base64 před uložením do fronty
       const serialized = await serializePayloadForPost(payload);
       await enqueue(serialized);
-      await swSyncRegister();
+      swSyncRegister(); // fire-and-forget — nesmí blokovat UI
       showSuccess(hasAudioNote
         ? "Offline — hlasová poznámka se odešle automaticky při signálu."
         : "Offline — odešle se automaticky při signálu.");
