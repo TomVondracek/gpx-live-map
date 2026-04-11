@@ -49,6 +49,7 @@ let mediaStream = null;
 let mediaRecorder = null;
 let mediaChunks = [];
 let mediaMimeType = null;
+let wakeLock = null;
 
 // ── Haptická odezva ───────────────────────────────────────────────────────────
 async function vibrate(type = "light") {
@@ -59,6 +60,28 @@ async function vibrate(type = "light") {
     else if (type === "error") await Haptics.notification({ type: "ERROR" });
     else if (type === "medium") await Haptics.impact({ style: "MEDIUM" });
     else await Haptics.impact({ style: "LIGHT" });
+  } catch {}
+}
+
+// ── Wake Lock (udržení rozsvíceného displeje) ─────────────────────────────────
+async function keepScreenOn() {
+  if (!("wakeLock" in navigator)) return;
+  if (wakeLock) return; // již aktivní
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => { wakeLock = null; });
+    console.log("Wake lock aktivován");
+  } catch (e) {
+    console.warn("Wake lock nelze aktivovat:", e.message);
+  }
+}
+
+async function allowScreenOff() {
+  if (!wakeLock) return;
+  try {
+    await wakeLock.release();
+    wakeLock = null;
+    console.log("Wake lock uvolněn");
   } catch {}
 }
 
@@ -713,6 +736,7 @@ async function startRecording() {
     }
     setRecordingUI(true);
     vibrate("medium");
+    keepScreenOn();
   } catch (e) {
     isRecording = false;
     activeEngine = null;
@@ -761,6 +785,7 @@ function finishRecording() {
   activeCaptureMode = null;
   setRecordingUI(false);
   vibrate("medium");
+  allowScreenOff();
 
   const transcript = document.getElementById("transcript");
   transcript.readOnly = false;
@@ -915,6 +940,7 @@ async function startAudioRecording() {
     userStoppedRecording = false;
     setRecordingUI(true);
     vibrate("medium");
+    keepScreenOn();
 
     mediaRecorder.start();
     audioDurationInterval = setInterval(() => {
@@ -937,6 +963,7 @@ async function startAudioRecording() {
     activeCaptureMode = null;
     isRecording = false;
     setRecordingUI(false);
+    allowScreenOff();
     if (error && /permission/i.test(error.message || "")) {
       showError("Přístup k mikrofonu byl zamítnut. Povol oprávnění v nastavení aplikace.");
     } else {
@@ -1304,6 +1331,12 @@ async function init() {
   if (isOnline) {
     flushQueue();
   }
+
+  // Pojistka: uvolni wake lock při zavření/přepnutí aplikace
+  window.addEventListener("beforeunload", () => allowScreenOff());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") allowScreenOff();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", init);
