@@ -85,6 +85,43 @@ async function allowScreenOff() {
   } catch {}
 }
 
+// ── Zvuková signalizace (Pípnutí) ─────────────────────────────────────────────
+let audioCtx = null;
+
+function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+}
+
+function beep(type = "start") {
+  try {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (type === "start") {
+      // Jedno krátké vysoké pípnutí (800 Hz, 120 ms)
+      osc.frequency.value = 800;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.12);
+    } else if (type === "stop") {
+      // Sestupný tón (600 Hz → 400 Hz, 240 ms)
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.setValueAtTime(400, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.24);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.24);
+    }
+  } catch {}
+}
+
 function normalizeTranscriptWhitespace(text) {
   return String(text || "")
     .replace(/\s+/g, " ")
@@ -737,6 +774,7 @@ async function startRecording() {
     setRecordingUI(true);
     vibrate("medium");
     keepScreenOn();
+    beep("start");
   } catch (e) {
     isRecording = false;
     activeEngine = null;
@@ -786,6 +824,7 @@ function finishRecording() {
   setRecordingUI(false);
   vibrate("medium");
   allowScreenOff();
+  beep("stop");
 
   const transcript = document.getElementById("transcript");
   transcript.readOnly = false;
@@ -941,6 +980,7 @@ async function startAudioRecording() {
     setRecordingUI(true);
     vibrate("medium");
     keepScreenOn();
+    beep("start");
 
     mediaRecorder.start();
     audioDurationInterval = setInterval(() => {
