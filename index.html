@@ -444,7 +444,8 @@ let gpxPoints = []; // for route matching
 let activePointKey = null;
 let hasShownInitialLatestPopup = false;
 let isRefreshingMarkers = false;
-let notesPolyline = null; // L.polyline spojující note markery chronologicky
+let notesPolyline = null;  // L.polyline spojující note markery chronologicky
+let arrowMarkers  = [];    // směrové šipky na spojnici
 
 // ── Lightbox ─────────────────────────────────────────────────────────────────
 (function () {
@@ -593,6 +594,16 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
             Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   return R * c;
+}
+
+// Výpočet azimutu (bearing) mezi dvěma GPS body [lat, lon] → stupně (0° = sever, po směru hodinových ručiček)
+function bearing(a, b) {
+  const dLon = (b[1] - a[1]) * Math.PI / 180;
+  const lat1 = a[0] * Math.PI / 180;
+  const lat2 = b[0] * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
 function findRouteKm(lat, lon) {
@@ -1099,6 +1110,8 @@ async function loadData() {
     markers = [];
     markerByPointKey = new Map();
     if (notesPolyline) { map.removeLayer(notesPolyline); notesPolyline = null; }
+    arrowMarkers.forEach(m => map.removeLayer(m));
+    arrowMarkers = [];
 
     const validPoints = data.filter(point =>
       point &&
@@ -1119,6 +1132,30 @@ async function loadData() {
         opacity: 0.5,
         dashArray: "6, 6",
       }).addTo(map);
+
+      // ── Směrové šipky — jedna na každý segment, pod markery ───────────────
+      for (let i = 0; i < latlngs.length - 1; i++) {
+        const a = latlngs[i];
+        const b = latlngs[i + 1];
+        const midLat = (a[0] + b[0]) / 2;
+        const midLon = (a[1] + b[1]) / 2;
+        const angle  = bearing(a, b);
+        const arrow = L.marker([midLat, midLon], {
+          icon: L.divIcon({
+            className: "",
+            html: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"
+                        style="transform:rotate(${angle}deg);display:block;">
+                     <polygon points="7,0 13,13 7,9 1,13"
+                              fill="#22d3ee" opacity="0.7"/>
+                   </svg>`,
+            iconSize:   [14, 14],
+            iconAnchor: [7, 7],
+          }),
+          interactive: false,
+          keyboard:    false,
+        }).addTo(map);
+        arrowMarkers.push(arrow);
+      }
     }
 
     validPoints.forEach((point, index) => {
