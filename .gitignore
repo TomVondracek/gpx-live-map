@@ -38,6 +38,12 @@ local.properties
 # Google Drive Service Account credentials — NEVER commit this!
 gdrive-service-account.json
 
+# Google Drive OAuth2 token — NEVER commit this!
+.gdrive-token.json
+
+# Google Drive OAuth2 Desktop App credentials — NEVER commit this!
+gdrive-oauth-client.json
+
 # App icon source (large file, generated locally)
 icon-source.png
 

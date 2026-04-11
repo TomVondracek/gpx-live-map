@@ -1,224 +1,240 @@
-# Běh – poznámky (Live Running Map System)
+# UltraLog – Live Running Map System
 
-## Overview
-
-Real-time voice and text noted running tracker for ultra-distance runs. The runner dictates notes hands-free or records audio messages, which are automatically tagged with GPS coordinates and sent to a Google Sheet and Google Drive. Observers see notes and listen to audio on a live Leaflet map with a clickable notes panel. The system is designed for minimal cognitive load, offline resilience, and extremely low battery usage.
+Mobilní Android aplikace pro zaznamenávání poznámek při běhu (text / audio / foto) s live Leaflet mapou pro pozorovatele.
 
 ---
 
-## Architecture
+## Architektura
 
 ```
-Runner's Android phone (Capacitor native app)
+Běžcův Android telefon (Capacitor 6 native app)
         │
-        ├─ Google STT (online, cs-CZ)  ─→ text transcript  (primary)
-        ├─ Vosk STT (offline Czech)    ─→ text transcript  (fallback)
-        ├─ MediaDevices API            ─→ audio recording  (WebM)
-        ├─ Capacitor Geolocation       ─→ GPS coordinates  (on-demand)
-        ├─ Capacitor Device            ─→ battery level
+        ├─ Google STT (online, cs-CZ)   ──→ textový přepis  (primární)
+        ├─ Vosk STT (offline Czech)     ──→ textový přepis  (záloha)
+        ├─ MediaDevices API             ──→ audio nahrávka  (WebM/Base64)
+        ├─ Capacitor Camera             ──→ fotografie       (JPEG/Base64)
+        ├─ Capacitor Geolocation        ──→ GPS souřadnice  (watchPosition + cache)
+        ├─ Capacitor Haptics            ──→ haptická odezva
+        ├─ Screen Wake Lock API         ──→ displej svítí při nahrávání
         │
         ▼
-  IndexedDB offline queue
+  IndexedDB offline fronta (sw.js – Service Worker + Background Sync)
         │
-        ├─ Online: direct POST ──→ Google Apps Script ──┬─→ Google Sheets (metadata, texts, Drive IDs)
-        │                                               └─→ Google Drive (audio files)
-        └─ Offline: stored in queue
-             └─ Capacitor Network listener ──→ flush on reconnect
+        ├─ Online: direct POST ──→ Google Apps Script ──┬─→ Google Sheets (metadata, texty, Drive ID)
+        │                                               └─→ Google Drive (audio, foto soubory)
+        └─ Offline: uloženo do fronty
+             └─ Background Sync / visibilitychange → flush při reconnectu
 
                                                       │
                                                       ▼
                                              GitHub Pages (Leaflet.js)
                                                       │
                                                       ▼
-                                             Live Map for observers
-                                             (map + clickable notes + audio playback)
+                                             Live mapa pro pozorovatele
+                                             (mapa + poznámky + audio + foto lightbox)
 ```
-
-### Version history
-
-**v1 – PWA + MacroDroid:** Used MacroDroid for automation, later replaced by a vanilla JS PWA with Chrome's Web Speech API. Offline STT depended on Chrome's experimental on-device model (Chrome 127+). Service Worker + Background Sync for offline queue.
-
-**v2 – Native Android + Vosk (offline-only STT):** Capacitor wraps the web UI into a native Android APK. Speech recognition uses Vosk with a bundled Czech model (~40 MB). Service Worker replaced by in-app IndexedDB queue + Capacitor Network listener.
-
-**v3 – Hybrid STT & Telemetry:** Added Google STT (Android `SpeechRecognizer` API, cs-CZ) as the primary online engine. Vosk remains the offline fallback. Added real-time telemetry (speed, altitude) sent with notes. GPX route matching and weather fetching (via OpenMeteo) are handled automatically for map observers.
-
-**v4 – Audio Notes & Battery Optimized (current):** Added support for recording actual audio files (WebM), sending them as Base64 to Google Apps Script, and saving them to Google Drive. The live map now supports playing these audio notes directly from the map, automatically pausing updates during playback. Refined UI/UX for both mobile and desktop. Validated extreme battery optimization (on-demand GPS only, no background tasks).
 
 ---
 
-## Project Structure
+## Struktura projektu
 
 ```
 C:\DEV\gpx-live-map\
 │
-│  # ── Web source files (authoritative, edit these) ─────────────
-├── app.html              # Runner's app UI (dark mobile-first layout)
-├── app.js                # Main application logic (~1200 lines)
-├── index.html            # Live map for observers (Leaflet.js + notes panel)
-├── appscript.js          # Google Apps Script backend (deploy to GAS, not served locally)
-├── trasa.gpx             # GPX planned route (~2000 trackpoints)
+│  # ── Zdrojové soubory (editovat zde) ──────────────────────────
+├── app.html              # UI mobilní aplikace (CSS + HTML)
+├── app.js                # Veškerá JS logika (~1400 řádků)
+├── sw.js                 # Service Worker (Background Sync, IDB config store)
+├── index.html            # Live mapa pro pozorovatele (Leaflet.js)
+├── appscript.js          # Google Apps Script backend (nasadit do GAS)
+├── trasa.gpx             # GPX plánovaná trasa
 │
 │  # ── Capacitor / Android ──────────────────────────────────────
-├── capacitor.config.ts   # Capacitor config (appId, webDir, plugins)
-├── package.json          # npm dependencies (Capacitor + plugins)
-├── www/                  # GENERATED — do not edit (built by scripts/copy-www.js)
+├── capacitor.config.ts   # Capacitor konfigurace (appId: cz.behpoznamky.app, appName: UltraLog)
+├── package.json          # npm závislosti (Capacitor 6 + pluginy)
+├── www/                  # GENEROVÁNO – needitovat (build: scripts/copy-www.js)
 ├── android/
 │   ├── app/
 │   │   ├── build.gradle                  # Vosk SDK deps, noCompress config
 │   │   └── src/main/
-│   │       ├── AndroidManifest.xml       # Permissions: audio, location, network
+│   │       ├── AndroidManifest.xml       # Oprávnění: audio, lokace, síť, kamera
+│   │       ├── res/
+│   │       │   ├── mipmap-*/             # Ikony pro všechny Android density (generováno)
+│   │       │   └── values/strings.xml    # app_name: "UltraLog"
 │   │       ├── assets/
-│   │       │   ├── models/vosk-model-small-cs/  # Czech Vosk model (~40 MB, gitignored)
-│   │       │   └── public/               # Web assets (copied by cap sync)
+│   │       │   ├── models/vosk-model-small-cs/  # Český Vosk model (~40 MB, gitignored)
+│   │       │   └── public/               # Web assets (kopíruje cap sync)
 │   │       └── java/cz/behpoznamky/app/
-│   │           ├── MainActivity.java     # Registers VoskPlugin + GoogleSTTPlugin
-│   │           ├── vosk/VoskPlugin.java  # Capacitor plugin: offline STT via Vosk
-│   │           └── googlestt/GoogleSTTPlugin.java  # Capacitor plugin: online STT
-│   ├── build.gradle                      # Root gradle config + Vosk Maven repo
-│   └── variables.gradle                  # SDK versions (compileSdk=35, minSdk=24)
+│   │           ├── MainActivity.java
+│   │           ├── vosk/VoskPlugin.java
+│   │           └── googlestt/GoogleSTTPlugin.java
+│   └── variables.gradle                  # SDK verze (compileSdk=35, minSdk=24)
 │
-│  # ── Build scripts ────────────────────────────────────────────
+│  # ── Build skripty ────────────────────────────────────────────
 ├── scripts/
-│   ├── copy-www.js             # Copies web assets to www/ (app.html→index.html rename)
-│   └── download-vosk-model.js  # Downloads Czech Vosk model into android assets
+│   ├── copy-www.js             # Kopíruje web assets do www/ (app.html→index.html)
+│   ├── generate-icons.js       # Generuje Android mipmap ikony z icon-source.png
+│   ├── create-icon-source.js   # Generuje SVG-based icon-source.png (fallback)
+│   ├── upload-apk.js           # Nahrává APK na Google Drive (OAuth2)
+│   └── download-vosk-model.js  # Stahuje český Vosk model do android assets
 │
-│  # ── Config ───────────────────────────────────────────────────
-├── .gitignore            # Ignores node_modules, www/, build artifacts, vosk model, IDE files
-└── README.md             # This file
+│  # ── Konfigurace (gitignored) ──────────────────────────────────
+├── runtime-config.js           # WRITE_TOKEN, SHEET_URL (gitignored)
+├── gdrive-oauth-client.json    # OAuth2 Desktop App credentials (gitignored)
+├── .gdrive-token.json          # OAuth2 refresh token (generováno při prvním upload-apk)
+├── gdrive-service-account.json # Service Account credentials (gitignored, nepoužívá se)
+└── icon-source.png             # Zdrojová ikona 1024×1024 (gitignored)
 ```
 
 ---
 
-## Battery Optimization
+## Build & vývoj
 
-The mobile app is designed for **extreme battery efficiency**, crucial for ultra-marathons:
-1. **On-Demand GPS:** It does not track location continuously (`watchPosition`). The GPS chip is activated for a few seconds only when sending a note.
-2. **No Background Execution:** The app does not use wake locks or background services. When the phone is locked or the app is minimized, it sleeps entirely, consuming virtually zero battery.
-3. **No Polling:** Unlike the live map, the mobile app does not poll the server. It only uses the network exactly when transmitting a payload.
-
----
-
-## Key Components
-
-### 1. Runner's App (`app.html` + `app.js`)
-
-**Purpose:** Voice/Text note capture, Audio recording, GPS tagging, offline queue management.
-
-**UI:** Single-screen dark-themed mobile interface:
-- Status bar with online/offline indicator, battery level, queued note count
-- Recording mode tabs: TEXT (Speech-to-Text) vs. AUDIO (Voice recording)
-- Real-time transcript textarea or audio duration timer
-- Send / Discard buttons
-
-**Data flow per note:**
-1. User records text (via STT) or audio (via MediaDevices).
-2. User taps Odeslat → `refreshBattery()` + `Geolocation.getCurrentPosition()`
-3. Payload (including Base64 encoded audio if applicable) → direct POST if online, else enqueue.
-4. On POST failure: enqueue for later retry.
-
----
-
-### 2. Google STT Plugin & 3. Vosk Plugin
-
-Both native plugins handle speech-to-text functionality.
-- **Google STT:** Primary online engine (`cs-CZ`).
-- **Vosk:** Offline fallback engine (bundled Czech model). Auto-restarts on silence timeouts transparently.
-
----
-
-### 4. Live Map (`index.html`)
-
-**Purpose:** Read-only map visualization for observers.
-
-**Features:**
-- Leaflet.js map with OpenStreetMap tiles and GPX route overlay.
-- Note markers fetched from Google Apps Script every 10 seconds.
-- **Audio Playback:** Notes containing audio can be played directly from the map popups or side panel.
-- **Smart Refresh:** The 10-second auto-refresh automatically **pauses** if an audio note is currently playing, preventing playback interruption.
-- **Telemetry & Weather:** Shows route position (km), movement speed (km/h), altitude (m), and weather info at the time.
-- **Responsive Notes Panel:** Right-side panel (desktop) or slide-up drawer (mobile). Auto-scrolls to the newest note unless the user is scrolling manually.
-
-**Access protection:** Open the map with a token in the URL hash, e.g., `map.html#token=YOUR_READ_TOKEN`.
-
----
-
-### 5. Backend (`appscript.js`)
-
-**Platform:** Google Apps Script (deployed as web app).
-
-**Functions:**
-- `doPost(e)` — Parses JSON. Handles both text notes and audio files. Audio files are decoded from Base64 and saved to a specific Google Drive folder. Appends metadata to Google Sheets.
-- `doGet(e)` — Returns all rows as JSON. If requested, returns a specific audio file as Base64 for the map to play.
-
-**Critical Setup for Google Drive:**
-For the Apps Script to save audio files to Google Drive, it needs explicit permission.
-1. Deploy the script.
-2. In the Apps Script editor, create a dummy function (e.g., `function testDrive() { DriveApp.getFiles(); }`).
-3. Run this function manually once. Google will prompt you for Drive permissions. Accept them. Without this, audio uploads will fail silently.
-
-**No Content-Type header** in POST requests — intentional. Sends as `text/plain` to avoid CORS preflight.
-
----
-
-## Build & Development
-
-### Prerequisites
+### Prerekvizity
 
 - **Node.js** (v18+)
-- **Android Studio** (Hedgehog or later) with Android SDK
+- **Android Studio** (Hedgehog nebo novější) s Android SDK
 - **Java JDK 21**
 
-### First-time setup
+### První spuštění po klonování
 
 ```powershell
 npm install
-node scripts/download-vosk-model.js
-npm run cap:sync
+node scripts/download-vosk-model.js   # stáhne ~40 MB Vosk model
 ```
 
 ### Build APK
 
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
-npm run cap:sync
+npm run build                          # kopíruje web assets do www/
+npx cap sync                          # synchronizuje do android/
 cd android
-.\gradlew.bat assembleDebug
+.\gradlew assembleDebug
 ```
-APK output: `android/app/build/outputs/apk/debug/app-debug.apk`
+
+APK výstup: `android/app/build/outputs/apk/debug/app-debug.apk`
+
+### Nahrání APK na Google Drive
+
+```powershell
+npm run upload-apk
+```
+
+První spuštění vyžaduje OAuth2 autorizaci v prohlížeči. Token se uloží do `.gdrive-token.json` — další spuštění jsou automatická.
+
+### Regenerace ikon
+
+```powershell
+# Z vlastní ikony:
+# Ulož 1024×1024 PNG jako icon-source.png do kořene projektu
+node scripts/generate-icons.js
+
+# Nebo vygeneruj SVG-based fallback ikonu:
+node scripts/create-icon-source.js
+node scripts/generate-icons.js
+```
 
 ---
 
-## Configuration
+## Klíčové součásti
 
-### Android permissions (`AndroidManifest.xml`)
+### 1. Mobilní aplikace (`app.html` + `app.js`)
 
-| Permission               | Used by                          |
-| ------------------------ | -------------------------------- |
-| `INTERNET`               | POST to Google Apps Script       |
-| `RECORD_AUDIO`           | Vosk + Google STT + Audio Notes  |
-| `MODIFY_AUDIO_SETTINGS`  | MediaDevices API (Audio Notes)   |
-| `ACCESS_FINE_LOCATION`   | GPS coordinates per note         |
-| `ACCESS_COARSE_LOCATION` | Fallback location                |
-| `ACCESS_NETWORK_STATE`   | Online/offline detection         |
+**Funkce:** Záznam poznámek (text / audio / foto), GPS tagging, offline fronta.
+
+**UI:** Tmavý mobilní layout:
+- Status bar: online/offline, GPS accuracy badge (zelená/žlutá/červená), stav baterie, počet čekajících poznámek
+- Záložky záznamu: TEXT (STT) / AUDIO (nahrávka) / FOTO (kamera)
+- Tlačítka: Odeslat / Zahodit
+- Bottom sheet: fronta čekajících položek se seznamem a možností smazání
+
+**Tok dat per poznámka:**
+1. Uživatel diktuje text (STT) nebo nahrává audio/foto.
+2. Tap Odeslat → `refreshBattery()` + GPS z cache (max 30s stará) nebo nový fix.
+3. Audio/foto → Base64 serializace **před** enqueue (SW nemá přístup k in-memory Blob).
+4. Přímý POST pokud online, jinak enqueue do IDB → Background Sync / visibilitychange pojistka.
+
+### 2. Service Worker (`sw.js`)
+
+- Background Sync tag: `flush-queue`
+- Čte WRITE_TOKEN + SHEET_URL z IDB config store (verze 2)
+- `swSyncRegister()` je fire-and-forget (nesmí blokovat UI)
+
+### 3. Live mapa (`index.html`)
+
+**Funkce:** Read-only vizualizace pro pozorovatele.
+
+- Leaflet.js + OpenStreetMap + GPX trasa overlay
+- Note markery (modrá = starší, červená = poslední bod)
+- **Spojnice bodů:** přerušovaná cyan čára mezi markery (chronologický postup)
+- Poznámky fetchovány z Google Apps Script každých 10 sekund
+- **Audio přehrávání:** přímo z popup / side panelu; refresh se pozastaví během přehrávání
+- **Foto lightbox:** fullscreen overlay, klávesa Escape, plné rozlišení (w1600)
+- **Telemetrie:** pozice na trase (km), rychlost (km/h), nadmořská výška (m), počasí (OpenMeteo)
+- **Favicon:** inline SVG (stejný design jako ikona aplikace)
+- Přístup chráněn tokenem: `map.html#token=READ_TOKEN`
+
+### 4. Backend (`appscript.js`)
+
+**Platforma:** Google Apps Script (nasadit jako web app).
+
+- `doPost(e)` — parsuje JSON, ukládá text/audio/foto. Audio a foto dekóduje z Base64 → Google Drive.
+- `doGet(e)` — vrací všechny řádky jako JSON; na vyžádání vrací audio soubor jako Base64.
+- **POZOR:** POST nesmí obsahovat `Content-Type` header (CORS preflight workaround).
+- **POZOR:** Po nasazení spusť v editoru dummy funkci s `DriveApp.getFiles()` pro udělení Drive oprávnění.
 
 ---
 
-## Critical Invariants
+## Android oprávnění
 
-1. **POST requests to Google Apps Script must NOT include a Content-Type header.** Avoids CORS preflight.
-2. **`app.html` in the project root is the source of truth.** Never edit `www/` or `android/` web assets directly.
-3. **`app.html` is renamed to `index.html` in `www/`** because Capacitor loads `index.html` as the entry point. The original `index.html` (observer map) becomes `map.html`.
-4. **The Vosk model is gitignored.** Run `node scripts/download-vosk-model.js` after cloning.
-5. **IndexedDB queue records include the full POST URL.**
-6. **STT auto-restart relies on `userStoppedRecording` flag.**
-7. **Google Apps Script needs explicit Drive authorization** via a manual run in the editor to accept audio uploads.
+| Oprávnění                | Použití                              |
+|--------------------------|--------------------------------------|
+| `INTERNET`               | POST na Google Apps Script           |
+| `RECORD_AUDIO`           | Vosk + Google STT + audio záznamy    |
+| `MODIFY_AUDIO_SETTINGS`  | MediaDevices API                     |
+| `ACCESS_FINE_LOCATION`   | GPS souřadnice                       |
+| `ACCESS_COARSE_LOCATION` | Záložní lokace                       |
+| `ACCESS_NETWORK_STATE`   | Detekce online/offline               |
+| `CAMERA`                 | Focení poznámek                      |
 
 ---
 
-## Possible Future Improvements
+## Kritické invarianty
 
-1. **Tune STT field thresholds** — test Vosk silence timeouts during actual running.
-2. **Generate proper app icons** — replace Capacitor defaults.
-3. **Keep screen on during recording** — use `@capacitor/keep-awake`.
-4. **Current position indicator** — highlight runner's last known position on the live map.
-5. **Camera integration** — capture and attach a photo to a note.
+1. **POST na Google Apps Script nesmí mít `Content-Type` header** — předchází CORS preflight.
+2. **`app.html` je zdrojový soubor** — nikdy needituj `www/` ani `android/` web assets přímo.
+3. **`app.html` → `www/index.html`**, původní `index.html` (mapa) → `www/map.html` (Capacitor načítá `index.html`).
+4. **Vosk model je gitignored** — po klonování spusť `node scripts/download-vosk-model.js`.
+5. **Audio Blob musí být serializován (→ Base64) před `enqueue()`** — Service Worker nemá přístup k in-memory Blob objektům.
+6. **`swSyncRegister()` musí být fire-and-forget** — `navigator.serviceWorker.ready` může blokovat indefinitely.
+7. **`registerServiceWorker()` a `saveConfigForSW()` musí být awaited** na začátku `init()` — jinak WRITE_TOKEN nemusí být v IDB před prvním enqueue.
+8. **GPS cache max 30s stará** v `buildBasePayload()` — eliminuje zpoždění odesílání.
+9. **`icon-source.png` a credentials soubory jsou gitignored** — nesmí jít do repozitáře.
+
+---
+
+## Google Drive upload setup (jednorázový)
+
+### OAuth2 Desktop App (doporučeno pro osobní Gmail)
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → projekt `ultralog-drive-upload`
+2. **"+ Create Credentials"** → **"OAuth client ID"** → **Desktop app** → stáhnout JSON → uložit jako `gdrive-oauth-client.json`
+3. OAuth consent screen → přidat svůj email jako **Test user**
+4. `npm run upload-apk` → jednou autorizovat v prohlížeči → token uložen do `.gdrive-token.json`
+
+---
+
+## Testovací scénáře
+
+- **Online – TEXT:** diktovat poznámku → odeslat → ověřit na mapě
+- **Online – AUDIO:** nahrát poznámku → odeslat → přehrát na mapě
+- **Online – FOTO:** vyfotit → odeslat → ověřit lightbox na mapě
+- **Offline – TEXT/AUDIO/FOTO:** vypnout Wi-Fi → zaznamenat → fronta → zapnout Wi-Fi → auto-flush → ověřit mapu
+- **GPS accuracy badge:** zelená ≤10m / žlutá ≤30m / červená >30m
+- **Vibrace:** úspěšné odeslání + chyba
+- **Wake Lock:** displej svítí během nahrávání
+- **Zvuková signalizace:** pípnutí na start/stop nahrávání
+- **Lightbox:** Escape zavírá, caption zobrazuje datum a čas, klik na backdrop zavírá
+- **Spojnice bodů:** přerušovaná čára mezi markery se zobrazuje správně
+- **Audio refresh pauza:** refresh se pozastaví během přehrávání audio poznámky
+- **Offline fronta UI:** badge "Čekají: N", bottom sheet se seznamem a smazáním

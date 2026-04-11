@@ -444,6 +444,7 @@ let gpxPoints = []; // for route matching
 let activePointKey = null;
 let hasShownInitialLatestPopup = false;
 let isRefreshingMarkers = false;
+let notesPolyline = null; // L.polyline spojující note markery chronologicky
 
 // ── Lightbox ─────────────────────────────────────────────────────────────────
 (function () {
@@ -1097,6 +1098,7 @@ async function loadData() {
     markers.forEach(m => map.removeLayer(m));
     markers = [];
     markerByPointKey = new Map();
+    if (notesPolyline) { map.removeLayer(notesPolyline); notesPolyline = null; }
 
     const validPoints = data.filter(point =>
       point &&
@@ -1107,6 +1109,17 @@ async function loadData() {
       !Number.isNaN(Number(point.lat)) &&
       !Number.isNaN(Number(point.lon))
     );
+
+    // ── Spojnice bodů — přidána PŘED markery, aby byla pod nimi v z-order ──────
+    if (validPoints.length >= 2) {
+      const latlngs = validPoints.map(p => [Number(p.lat), Number(p.lon)]);
+      notesPolyline = L.polyline(latlngs, {
+        color: "#22d3ee",
+        weight: 2,
+        opacity: 0.5,
+        dashArray: "6, 6",
+      }).addTo(map);
+    }
 
     validPoints.forEach((point, index) => {
       const isLast = index === validPoints.length - 1;
