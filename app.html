@@ -504,6 +504,33 @@
       background: rgba(233, 196, 106, 0.32);
     }
 
+    /* ── GPS accuracy badge ── */
+    #gps-badge {
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+    }
+
+    #gps-badge.gps-badge-good {
+      background: rgba(42, 157, 143, 0.18);
+      border: 1px solid rgba(42, 157, 143, 0.45);
+      color: #4ecdc4;
+    }
+
+    #gps-badge.gps-badge-ok {
+      background: rgba(233, 196, 106, 0.15);
+      border: 1px solid rgba(233, 196, 106, 0.35);
+      color: #f6d98f;
+    }
+
+    #gps-badge.gps-badge-bad {
+      background: rgba(230, 57, 70, 0.15);
+      border: 1px solid rgba(230, 57, 70, 0.35);
+      color: #ff6b6b;
+    }
+
     /* ── Queue overlay + panel ── */
     #queue-overlay {
       position: fixed;

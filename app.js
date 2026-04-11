@@ -50,6 +50,9 @@ let mediaRecorder = null;
 let mediaChunks = [];
 let mediaMimeType = null;
 let wakeLock = null;
+let lastGpsAccuracy = null;   // přesnost posledního GPS fixu v metrech
+let lastGpsCoords = null;     // cache posledního GPS fixu { lat, lon, speed, altitude, ts }
+let gpsWatchId = null;        // ID watcheru pro zastavení
 
 // ── Haptická odezva ───────────────────────────────────────────────────────────
 async function vibrate(type = "light") {
@@ -404,6 +407,48 @@ async function getPosition() {
     maximumAge: 30000,
   });
   return pos;
+}
+
+// Spustí kontinuální sledování GPS pro cache přesnosti a urychlení odesílání.
+// Používá nízkou frekvenci (minimumUpdateInterval) pro šetření baterie.
+async function startGpsWatch() {
+  const Geolocation = getCapacitorPlugin("Geolocation");
+  if (!Geolocation || gpsWatchId !== null) return;
+  try {
+    gpsWatchId = await Geolocation.watchPosition(
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        // minimumUpdateInterval je Android-specific Capacitor rozšíření (ms).
+        // Velká hodnota = méně probuzení GPS chipu = šetří baterii.
+        minimumUpdateInterval: 10000,
+      },
+      (pos, err) => {
+        if (err || !pos) return;
+        const c = pos.coords;
+        lastGpsAccuracy = c.accuracy != null ? Math.round(c.accuracy) : null;
+        lastGpsCoords = {
+          lat: c.latitude,
+          lon: c.longitude,
+          speed: (c.speed !== null && c.speed >= 0) ? Math.round(c.speed * 3.6 * 10) / 10 : null,
+          altitude: c.altitude !== null ? Math.round(c.altitude) : null,
+          ts: Date.now(),
+        };
+        updateStatus();
+      }
+    );
+  } catch (e) {
+    console.warn("GPS watch nelze spustit:", e);
+  }
+}
+
+async function stopGpsWatch() {
+  const Geolocation = getCapacitorPlugin("Geolocation");
+  if (!Geolocation || gpsWatchId === null) return;
+  try {
+    await Geolocation.clearWatch({ id: gpsWatchId });
+  } catch (_) {}
+  gpsWatchId = null;
 }
 
 // ── Baterie (Capacitor Device) ────────────────────────────────────────────────
@@ -1107,19 +1152,32 @@ async function buildBasePayload() {
   let speed = null;
   let altitude = null;
 
-  try {
-    const pos = await getPosition();
-    lat = pos.coords.latitude;
-    lon = pos.coords.longitude;
+  // Použij cached GPS fix z watchPosition (max 30 s starý) — vyhne se čekání na GPS.
+  // Pokud cache chybí nebo je moc stará, padneme zpět na přímé getCurrentPosition().
+  const CACHE_MAX_AGE_MS = 30000;
+  const cacheAge = lastGpsCoords ? (Date.now() - lastGpsCoords.ts) : Infinity;
 
-    if (pos.coords.speed !== null && pos.coords.speed >= 0) {
-      speed = Math.round(pos.coords.speed * 3.6 * 10) / 10;
+  if (lastGpsCoords && cacheAge <= CACHE_MAX_AGE_MS) {
+    lat = lastGpsCoords.lat;
+    lon = lastGpsCoords.lon;
+    speed = lastGpsCoords.speed;
+    altitude = lastGpsCoords.altitude;
+  } else {
+    // Fallback: přímý dotaz (pomalejší, ale bezpečný)
+    try {
+      const pos = await getPosition();
+      lat = pos.coords.latitude;
+      lon = pos.coords.longitude;
+      lastGpsAccuracy = pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : null;
+      if (pos.coords.speed !== null && pos.coords.speed >= 0) {
+        speed = Math.round(pos.coords.speed * 3.6 * 10) / 10;
+      }
+      if (pos.coords.altitude !== null) {
+        altitude = Math.round(pos.coords.altitude);
+      }
+    } catch {
+      showError("GPS nedostupná — záznam bude uložen bez polohy.");
     }
-    if (pos.coords.altitude !== null) {
-      altitude = Math.round(pos.coords.altitude);
-    }
-  } catch {
-    showError("GPS nedostupná — záznam bude uložen bez polohy.");
   }
 
   return {
@@ -1337,8 +1395,24 @@ async function updateStatus() {
 
   if (textEl) {
     const parts = [onlineText, speechText, batteryText].filter(Boolean).join("  ·  ");
+
+    // Sestavit GPS badge HTML
+    let gpsBadgeHtml = "";
+    if (lastGpsAccuracy !== null) {
+      let gpsClass = "gps-badge-bad";
+      if (lastGpsAccuracy <= 10) gpsClass = "gps-badge-good";
+      else if (lastGpsAccuracy <= 30) gpsClass = "gps-badge-ok";
+      gpsBadgeHtml = `  ·  <span id="gps-badge" class="${gpsClass}">GPS: ~${lastGpsAccuracy} m</span>`;
+    }
+
+    // Sestavit queue badge HTML
+    let queueBadgeHtml = "";
     if (queueCount > 0) {
-      textEl.innerHTML = `${parts}  ·  <button id="queue-badge">Čekají: ${queueCount}</button>`;
+      queueBadgeHtml = `  ·  <button id="queue-badge">Čekají: ${queueCount}</button>`;
+    }
+
+    if (gpsBadgeHtml || queueBadgeHtml) {
+      textEl.innerHTML = `${parts}${gpsBadgeHtml}${queueBadgeHtml}`;
       const badge = document.getElementById("queue-badge");
       if (badge) badge.addEventListener("click", () => { vibrate("light"); openQueuePanel(); });
     } else {
@@ -1457,10 +1531,14 @@ async function init() {
     flushQueue();
   }
 
+  // Spustit GPS watcher pro průběžnou aktualizaci přesnosti a cache polohy
+  startGpsWatch();
+
   // Pojistka: uvolni wake lock při zavření/přepnutí aplikace
-  window.addEventListener("beforeunload", () => allowScreenOff());
+  window.addEventListener("beforeunload", () => { allowScreenOff(); stopGpsWatch(); });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") allowScreenOff();
+    // GPS watch necháme běžet i na pozadí — OS ho může omezit sám
   });
 }
 
