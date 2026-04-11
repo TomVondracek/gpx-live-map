@@ -12,7 +12,7 @@
 
 ## 🗺️ Vylepšení webové mapy (Zobrazení dat)
 - [x] **Lightbox pro fotky na mapě**: fullscreen galerie pro zobrazení fotek po kliknutí na miniaturu v mapě.
-- [ ] **Spojnice bodů na mapě**: vizualizace reálného postupu nakreslením čáry mezi zaznamenanými body.
+- [x] **Spojnice bodů na mapě**: vizualizace reálného postupu nakreslením čáry mezi zaznamenanými body.
 
 ## 🛠️ Technický dluh a optimalizace
 - [ ] **Přepis do TypeScriptu**: refaktoring `app.js` pro vyšší stabilitu kódu.
