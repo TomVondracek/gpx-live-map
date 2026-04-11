@@ -50,6 +50,18 @@ let mediaRecorder = null;
 let mediaChunks = [];
 let mediaMimeType = null;
 
+// ── Haptická odezva ───────────────────────────────────────────────────────────
+async function vibrate(type = "light") {
+  const Haptics = getCapacitorPlugin("Haptics");
+  if (!Haptics) return;
+  try {
+    if (type === "success") await Haptics.notification({ type: "SUCCESS" });
+    else if (type === "error") await Haptics.notification({ type: "ERROR" });
+    else if (type === "medium") await Haptics.impact({ style: "MEDIUM" });
+    else await Haptics.impact({ style: "LIGHT" });
+  } catch {}
+}
+
 function normalizeTranscriptWhitespace(text) {
   return String(text || "")
     .replace(/\s+/g, " ")
@@ -700,6 +712,7 @@ async function startRecording() {
       console.log("Nahrávání spuštěno (Vosk)");
     }
     setRecordingUI(true);
+    vibrate("medium");
   } catch (e) {
     isRecording = false;
     activeEngine = null;
@@ -747,6 +760,7 @@ function finishRecording() {
   activeEngine = null;
   activeCaptureMode = null;
   setRecordingUI(false);
+  vibrate("medium");
 
   const transcript = document.getElementById("transcript");
   transcript.readOnly = false;
@@ -900,6 +914,7 @@ async function startAudioRecording() {
     activeCaptureMode = "audio";
     userStoppedRecording = false;
     setRecordingUI(true);
+    vibrate("medium");
 
     mediaRecorder.start();
     audioDurationInterval = setInterval(() => {
@@ -1132,6 +1147,7 @@ function showError(msg) {
   el.textContent = msg;
   el.classList.remove("hidden");
   document.getElementById("section-success").classList.add("hidden");
+  vibrate("error");
 }
 
 function showSuccess(msg) {
@@ -1140,6 +1156,7 @@ function showSuccess(msg) {
   el.classList.remove("hidden");
   document.getElementById("section-error").classList.add("hidden");
   setTimeout(() => el.classList.add("hidden"), 3000);
+  vibrate("success");
 }
 
 function getMapPageHref() {
@@ -1209,6 +1226,7 @@ async function takePhoto() {
       base64: image.base64String,
       mimeType: `image/${image.format || 'jpeg'}`
     };
+    vibrate("medium");
 
     // Zobrazení náhledu
     const container = document.getElementById("photo-preview");
@@ -1242,6 +1260,7 @@ async function init() {
   // Zaregistrování tlačítek ihned, aby UI reagovalo i během načítání STT
   setRecordingUI(false);
   document.getElementById("btn-record").addEventListener("click", async () => {
+    vibrate("light");
     if (isRecording) {
       await stopRecording();
     } else {
@@ -1250,6 +1269,7 @@ async function init() {
   });
 
   document.getElementById("btn-audio").addEventListener("click", async () => {
+    vibrate("light");
     if (isRecording && activeCaptureMode === "audio") {
       await stopAudioRecording();
     } else if (!isRecording) {
@@ -1258,6 +1278,7 @@ async function init() {
   });
 
   document.getElementById("btn-photo").addEventListener("click", async () => {
+    vibrate("light");
     if (!isRecording) {
       await takePhoto();
     }
