@@ -53,6 +53,13 @@ if (fs.existsSync(appJs)) {
   console.log("  app.js -> www/app.js");
 }
 
+// sw.js → www/sw.js (Service Worker pro Background Sync)
+const swJs = path.join(ROOT, "sw.js");
+if (fs.existsSync(swJs)) {
+  fs.copyFileSync(swJs, path.join(WWW, "sw.js"));
+  console.log("  sw.js -> www/sw.js");
+}
+
 // runtime-config.js → www/runtime-config.js (lokální runtime konfigurace, pokud existuje)
 const runtimeConfig = path.join(ROOT, "runtime-config.js");
 const runtimeConfigTarget = path.join(WWW, "runtime-config.js");

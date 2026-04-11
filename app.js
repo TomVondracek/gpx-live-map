@@ -335,17 +335,36 @@ async function serializePayloadForPost(payload) {
 }
 
 // ── IndexedDB ─────────────────────────────────────────────────────────────────
+// DB verze 2: přidán store "config" pro sdílení konfigurace se Service Workerem.
+const DB_VERSION = 2;
+const CONFIG_STORE = "config";
+
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
       }
+      // Verze 2: store pro sdílenou konfiguraci (token, url) se Service Workerem
+      if (!db.objectStoreNames.contains(CONFIG_STORE)) {
+        db.createObjectStore(CONFIG_STORE, { keyPath: "key" });
+      }
     };
     req.onsuccess = (e) => resolve(e.target.result);
     req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+// Uloží konfigurační hodnotu do IDB config store (přístupná ze Service Workeru).
+async function saveConfig(key, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CONFIG_STORE, "readwrite");
+    tx.objectStore(CONFIG_STORE).put({ key, value });
+    tx.oncomplete = resolve;
+    tx.onerror = (e) => reject(e.target.error);
   });
 }
 
@@ -548,6 +567,46 @@ async function flushQueue() {
     await updateStatus();
   } finally {
     isFlushing = false;
+  }
+}
+
+// ── Service Worker & Background Sync ─────────────────────────────────────────
+
+// Registruje Service Worker (jednou při startu).
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    await navigator.serviceWorker.register("./sw.js", { scope: "./" });
+    console.log("Service Worker zaregistrován.");
+  } catch (e) {
+    console.warn("Service Worker registrace selhala:", e);
+  }
+}
+
+// Uloží WRITE_TOKEN a SHEET_URL do IDB config store, aby je mohl číst SW.
+async function saveConfigForSW() {
+  try {
+    await Promise.all([
+      saveConfig("WRITE_TOKEN", WRITE_TOKEN),
+      saveConfig("SHEET_URL", SHEET_URL),
+    ]);
+  } catch (e) {
+    console.warn("Nepodařilo se uložit konfiguraci pro SW:", e);
+  }
+}
+
+// Zaregistruje Background Sync tag — OS spustí SW jakmile bude síť dostupná.
+// Pokud Background Sync API není podporováno, tiše selže (pojistka je visibilitychange).
+async function swSyncRegister() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (reg.sync) {
+      await reg.sync.register("flush-queue");
+      console.log("Background sync tag zaregistrován.");
+    }
+  } catch (e) {
+    console.warn("Background sync registrace selhala (není kritická):", e);
   }
 }
 
@@ -1249,15 +1308,19 @@ async function sendNote() {
           throw postError;
         }
         console.log("Přímé odeslání selhalo, ukládám do fronty:", postError);
-        
-        await enqueue(payload);
+        // Serializovat Blob → base64 před uložením (SW/background nemá přístup k Blob)
+        const serialized = await serializePayloadForPost(payload);
+        await enqueue(serialized);
+        await swSyncRegister();
         showSuccess(hasAudioNote
           ? "Audio se teď nepodařilo odeslat, zkusí se znovu automaticky."
           : "Odeslání selhalo, zkusí se znovu automaticky.");
       }
     } else {
-      // Offline: ulož do fronty
-      await enqueue(payload);
+      // Offline: serializovat Blob → base64 před uložením do fronty
+      const serialized = await serializePayloadForPost(payload);
+      await enqueue(serialized);
+      await swSyncRegister();
       showSuccess(hasAudioNote
         ? "Offline — hlasová poznámka se odešle automaticky při signálu."
         : "Offline — odešle se automaticky při signálu.");
@@ -1534,10 +1597,19 @@ async function init() {
   // Spustit GPS watcher pro průběžnou aktualizaci přesnosti a cache polohy
   startGpsWatch();
 
+  // Service Worker + Background Sync: registrace a uložení tokenu do IDB
+  registerServiceWorker();
+  saveConfigForSW();
+
   // Pojistka: uvolni wake lock při zavření/přepnutí aplikace
   window.addEventListener("beforeunload", () => { allowScreenOff(); stopGpsWatch(); });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") allowScreenOff();
+    if (document.visibilityState === "hidden") {
+      allowScreenOff();
+    } else if (document.visibilityState === "visible" && isOnline) {
+      // Pojistka pro případ, že SW nestačil odeslat frontu na pozadí
+      flushQueue();
+    }
     // GPS watch necháme běžet i na pozadí — OS ho může omezit sám
   });
 }
