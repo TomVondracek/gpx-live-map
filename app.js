@@ -496,10 +496,6 @@ async function flushQueue() {
         }
         // Síť stále nedostupná — přestat, zkusíme znovu příště
         console.log("Flush queue: síť nedostupná, zkusíme později", error);
-        
-        if (record.payload.entry_type === "audio") {
-           alert("FLUSH CHYBA " + record.id + ":\n" + (error.message || error) + "\n" + (error.stack || ""));
-        }
         break;
       }
     }
@@ -508,6 +504,82 @@ async function flushQueue() {
   } finally {
     isFlushing = false;
   }
+}
+
+// ── Queue UI (správa čekající fronty) ─────────────────────────────────────────
+function formatQueueItemLabel(record) {
+  const type = record.payload && record.payload.entry_type;
+  if (type === "audio") {
+    const dur = record.payload.audioDurationSec || record.payload.audio_duration_sec;
+    const durText = dur ? ` · ${formatAudioDuration(dur)}` : "";
+    return { icon: "🎙", label: "Hlasová poznámka" + durText };
+  }
+  if (type === "photo") {
+    return { icon: "📷", label: "Fotografie" };
+  }
+  // text (default)
+  const note = String(record.payload && record.payload.note || "").trim();
+  const preview = note.length > 40 ? note.slice(0, 40) + "…" : (note || "Textová poznámka");
+  return { icon: "📝", label: preview };
+}
+
+function formatQueueItemDate(isoString) {
+  if (!isoString) return "";
+  try {
+    return new Date(isoString).toLocaleString("cs-CZ", {
+      day: "numeric", month: "numeric", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch {
+    return isoString;
+  }
+}
+
+async function openQueuePanel() {
+  const records = await getAllFromQueue();
+
+  const list = document.getElementById("queue-list");
+  const empty = document.getElementById("queue-empty");
+  list.innerHTML = "";
+
+  if (records.length === 0) {
+    empty.classList.remove("hidden");
+  } else {
+    empty.classList.add("hidden");
+    records.forEach((record) => {
+      const { icon, label } = formatQueueItemLabel(record);
+      const dateText = formatQueueItemDate(record.createdAt);
+
+      const li = document.createElement("li");
+      li.className = "queue-item";
+      li.innerHTML = `
+        <span class="queue-item-icon">${icon}</span>
+        <div class="queue-item-body">
+          <div class="queue-item-label">${label}</div>
+          <div class="queue-item-meta">${dateText}</div>
+        </div>
+        <button class="queue-item-delete" data-id="${record.id}">Smazat</button>
+      `;
+      list.appendChild(li);
+    });
+
+    list.querySelectorAll(".queue-item-delete").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        vibrate("light");
+        await deleteFromQueue(btn.dataset.id);
+        await updateStatus();
+        await openQueuePanel();
+      });
+    });
+  }
+
+  document.getElementById("queue-overlay").classList.remove("hidden");
+  document.getElementById("queue-panel").classList.remove("hidden");
+}
+
+function closeQueuePanel() {
+  document.getElementById("queue-overlay").classList.add("hidden");
+  document.getElementById("queue-panel").classList.add("hidden");
 }
 
 // ── Google STT (online rozpoznávání) ─────────────────────────────────────────
@@ -1119,10 +1191,6 @@ async function sendNote() {
         }
         console.log("Přímé odeslání selhalo, ukládám do fronty:", postError);
         
-        if (hasAudioNote) {
-           alert("DETAIL CHYBY:\n" + (postError.message || postError) + "\n" + (postError.stack || ""));
-        }
-        
         await enqueue(payload);
         showSuccess(hasAudioNote
           ? "Audio se teď nepodařilo odeslat, zkusí se znovu automaticky."
@@ -1260,13 +1328,22 @@ async function updateStatus() {
   const queueCount = await getQueueCount();
   const onlineText = isOnline ? "Online" : "Offline";
   const batteryText = batteryLevel !== null ? `Baterie: ${batteryLevel}%` : "";
-  const queueText = queueCount > 0 ? `Čekají: ${queueCount}` : "";
   const speechText = getSpeechStatusText();
 
   const dot = document.getElementById("status-dot");
-  const text = document.getElementById("status-text");
+  const textEl = document.getElementById("status-text");
   if (dot) dot.classList.toggle("offline", !isOnline);
-  if (text) text.textContent = [onlineText, speechText, batteryText, queueText].filter(Boolean).join("  ·  ");
+
+  if (textEl) {
+    const parts = [onlineText, speechText, batteryText].filter(Boolean).join("  ·  ");
+    if (queueCount > 0) {
+      textEl.innerHTML = `${parts}  ·  <button id="queue-badge">Čekají: ${queueCount}</button>`;
+      const badge = document.getElementById("queue-badge");
+      if (badge) badge.addEventListener("click", () => { vibrate("light"); openQueuePanel(); });
+    } else {
+      textEl.textContent = parts;
+    }
+  }
   updateDiagnostics();
 }
 
@@ -1356,6 +1433,13 @@ async function init() {
 
   // Auto-resize textarea při ruční editaci
   document.getElementById("transcript").addEventListener("input", autoResize);
+
+  // Queue panel — zavření
+  document.getElementById("queue-panel-close").addEventListener("click", () => {
+    vibrate("light");
+    closeQueuePanel();
+  });
+  document.getElementById("queue-overlay").addEventListener("click", closeQueuePanel);
 
   configureMapLinks();
 

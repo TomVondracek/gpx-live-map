@@ -484,6 +484,157 @@
 
     #section-success.hidden { display: none; }
 
+    /* ── Queue badge (klikatelný počet čekajících) ── */
+    #queue-badge {
+      background: rgba(233, 196, 106, 0.18);
+      border: 1px solid rgba(233, 196, 106, 0.45);
+      border-radius: 999px;
+      color: #f6d98f;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 2px 10px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: background 0.2s;
+    }
+
+    #queue-badge:active {
+      background: rgba(233, 196, 106, 0.32);
+    }
+
+    /* ── Queue overlay + panel ── */
+    #queue-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 100;
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+
+    #queue-overlay.hidden { display: none; }
+
+    #queue-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 101;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-radius: 18px 18px 0 0;
+      max-height: 65vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+      animation: slideUp 0.22s ease-out;
+    }
+
+    #queue-panel.hidden { display: none; }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+
+    #queue-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 1rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    #queue-panel-close {
+      background: rgba(255, 255, 255, 0.07);
+      border: none;
+      border-radius: 50%;
+      color: var(--muted);
+      width: 30px;
+      height: 30px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s;
+    }
+
+    #queue-panel-close:active { background: rgba(255, 255, 255, 0.14); }
+
+    #queue-list {
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+      padding: 8px 0;
+    }
+
+    #queue-empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 24px 20px;
+    }
+
+    #queue-empty.hidden { display: none; }
+
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .queue-item:last-child { border-bottom: none; }
+
+    .queue-item-icon {
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+
+    .queue-item-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .queue-item-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-item-meta {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .queue-item-delete {
+      background: rgba(230, 57, 70, 0.12);
+      border: 1px solid rgba(230, 57, 70, 0.35);
+      border-radius: var(--radius-sm);
+      color: #ff8a8a;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: background 0.2s;
+    }
+
+    .queue-item-delete:active { background: rgba(230, 57, 70, 0.28); }
+
     /* ── Footer odkaz na mapu ── */
     footer {
       text-align: center;
@@ -594,6 +745,17 @@
   <footer>
     <a href="./index.html" data-map-link>Zobrazit mapu</a>
   </footer>
+
+  <!-- Queue panel (bottom sheet) -->
+  <div id="queue-overlay" class="hidden"></div>
+  <div id="queue-panel" class="hidden">
+    <div id="queue-panel-header">
+      <span>Čekající položky</span>
+      <button id="queue-panel-close">✕</button>
+    </div>
+    <ul id="queue-list"></ul>
+    <p id="queue-empty" class="hidden">Fronta je prázdná.</p>
+  </div>
 
   <script>
     window.RUN_NOTES_CONFIG = window.RUN_NOTES_CONFIG || {};
