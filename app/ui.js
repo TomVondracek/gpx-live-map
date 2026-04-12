@@ -90,16 +90,39 @@ async function updateStatus() {
 
     let queueBadgeHtml = "";
     if (queueCount > 0) {
-      queueBadgeHtml = `  ·  <button id="queue-badge">Čekají: ${queueCount}</button>`;
+      if (gloveMode) {
+        // V glove mode: jen zobrazit počet, panel není přístupný
+        queueBadgeHtml = `  ·  <span id="queue-badge" class="queue-badge-static">Čekají: ${queueCount}</span>`;
+      } else {
+        queueBadgeHtml = `  ·  <button id="queue-badge">Čekají: ${queueCount}</button>`;
+      }
     }
 
     if (gpsBadgeHtml || queueBadgeHtml) {
       textEl.innerHTML = `${parts}${gpsBadgeHtml}${queueBadgeHtml}`;
-      const badge = document.getElementById("queue-badge");
-      if (badge) badge.addEventListener("click", () => { vibrate("light"); openQueuePanel(); });
+      if (!gloveMode) {
+        const badge = document.getElementById("queue-badge");
+        if (badge) badge.addEventListener("click", () => { vibrate("light"); openQueuePanel(); });
+      }
     } else {
       textEl.textContent = parts;
     }
   }
   updateDiagnostics();
+}
+
+// ── Glove mode ────────────────────────────────────────────────────────────────
+function setGloveMode(active) {
+  gloveMode = active;
+  try { localStorage.setItem("gloveMode", String(active)); } catch {}
+  document.body.classList.toggle("glove", active);
+
+  const btn = document.getElementById("btn-glove");
+  if (btn) {
+    btn.setAttribute("aria-pressed", String(active));
+    btn.classList.toggle("glove-active", active);
+  }
+
+  // Překreslit status bar (queue badge se mění na neklikatelný span)
+  updateStatus();
 }

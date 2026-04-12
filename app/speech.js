@@ -293,7 +293,10 @@ function finishRecording() {
   allowScreenOff();
 
   const transcript = document.getElementById("transcript");
-  transcript.readOnly = false;
+  // V glove mode necháme textarea read-only — klávesnice se neotvírá
+  if (!gloveMode) {
+    transcript.readOnly = false;
+  }
   const text = transcript.value.trim();
   if (text || pendingAudioNote) {
     document.getElementById("section-confirm").classList.remove("hidden");

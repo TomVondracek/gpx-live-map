@@ -10,8 +10,8 @@ Priority:
 
 ### Příští úkoly
 
-- [ ] `P1` Přidat klientský `entry_id` ke každé poznámce a připravit payload tak, aby šel bezpečně deduplikovat při retry/offline flush.
-- [ ] `P2` Přidat výraznější "glove mode" UX: větší tlačítka, vyšší kontrast, méně jemných interakcí.
+- [x] `P1` Přidat klientský `entry_id` ke každé poznámce a připravit payload tak, aby šel bezpečně deduplikovat při retry/offline flush.
+- [x] `P2` Přidat výraznější "glove mode" UX: větší tlačítka, vyšší kontrast, méně jemných interakcí.
 - [ ] `P2` Přidat nouzový režim / rychlé tlačítko `SOS`, které uloží prioritní událost do mapy.
 
 ### Hotovo
@@ -44,7 +44,7 @@ Priority:
 
 ### Příští úkoly
 
-- [ ] `P1` Zavést deduplikaci zápisů na backendu podle `entry_id`, aby retry/offline flush nevytvářel duplicitní řádky.
+- [x] `P1` Zavést deduplikaci zápisů na backendu podle `entry_id`, aby retry/offline flush nevytvářel duplicitní řádky.
 - [ ] `P1` Omezit přenos a ukládání tokenů na klientu; navrhnout bezpečnější read-only přístup pro mapu.
 - [ ] `P2` Omezit sdílení fotek přes Google Drive a zvážit bezpečnější serving než trvalé `ANYONE_WITH_LINK`.
 - [ ] `P2` Optimalizovat `doGet` tak, aby nečetl vždy celý sheet a škáloval i při delším běhu / více záznamech.
@@ -60,9 +60,9 @@ Priority:
 
 ### Příští úkoly
 
-- [ ] `P1` Rozdělit `app.js` do menších modulů podle domén (`audio`, `photo`, `gps`, `queue`, `network`, `ui`, `api`).
+- [x] `P1` Rozdělit `app.js` do menších modulů podle domén (`audio`, `photo`, `gps`, `queue`, `network`, `ui`, `api`).
 - [ ] `P1` Začít postupný přepis do TypeScriptu od sdílených datových typů a API payloadů.
-- [ ] `P2` Rozdělit logiku live mapy z `index.html` do samostatného JS souboru / modulů.
+- [x] `P2` Rozdělit logiku live mapy z `index.html` do samostatného JS souboru / modulů.
 - [ ] `P2` Přidat základní smoke/e2e testy pro hlavní scénáře: online text, offline audio, reconnect flush, foto upload.
 - [ ] `P3` Připravit release workflow pro build APK + upload artefaktu.
 - [ ] `P3` Přidat export/report z běhu: mapa, timeline, poznámky, galerie, audio odkazy.
