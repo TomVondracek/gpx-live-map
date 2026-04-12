@@ -17,8 +17,8 @@ const ROOT = path.resolve(__dirname, "..");
 const WWW = path.join(ROOT, "www");
 const DEFAULT_RUNTIME_CONFIG = "window.RUN_NOTES_CONFIG = window.RUN_NOTES_CONFIG || {};\n";
 
-// ── TypeScript: zkompilovat shared/*.ts → www/shared/ ────────────────────────
-console.log("  tsc: compiling shared/*.ts -> www/shared/");
+// ── TypeScript: zkompilovat shared/*.ts + app/*.ts → www/ ────────────────────
+console.log("  tsc: compiling shared/*.ts + app/*.ts -> www/");
 execSync("npx tsc --project tsconfig.shared.json", {
   stdio: "inherit",
   cwd: ROOT,
@@ -67,10 +67,10 @@ if (fs.existsSync(appJs)) {
   console.log("  app.js -> www/app.js");
 }
 
-// app/ → www/app/ (rozsekané mobilní moduly)
+// app/ → www/app/ (rozsekané mobilní moduly) — .ts soubory jsou řešeny přes tsc
 const appDir = path.join(ROOT, "app");
 if (fs.existsSync(appDir)) {
-  copyDirRecursive(appDir, path.join(WWW, "app"));
+  copyDirRecursive(appDir, path.join(WWW, "app"), { skipTs: true });
   console.log("  app -> www/app");
 }
 
