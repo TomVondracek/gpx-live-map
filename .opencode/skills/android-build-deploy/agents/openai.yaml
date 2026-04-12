@@ -1,0 +1,7 @@
+interface:
+  display_name: "Android Deploy"
+  short_description: "Deploy UltraLog from OpenCode"
+  default_prompt: "Use $android-build-deploy to run the full UltraLog Android deploy workflow from OpenCode."
+
+policy:
+  allow_implicit_invocation: true

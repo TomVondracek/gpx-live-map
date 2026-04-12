@@ -4,6 +4,18 @@ Mobilní Android aplikace pro zaznamenávání poznámek při běhu (text / audi
 
 ---
 
+## Deploy Status
+
+<!-- DEPLOY_STATUS:START -->
+- Poslední úspěšný deploy: 2026-04-12 09:52:07
+- Agent: Codex (GPT-5.4)
+- APK build: fresh Gradle debug rebuild
+- APK cesta: `android\app\build\outputs\apk\debug\app-debug.apk`
+- Google Drive: https://drive.google.com/drive/folders/1UYT3vfMNvShxLhRcozh5kjMF1nEd9swj
+<!-- DEPLOY_STATUS:END -->
+
+---
+
 ## Architektura
 
 ```
@@ -121,6 +133,33 @@ npm run upload-apk
 ```
 
 První spuštění vyžaduje OAuth2 autorizaci v prohlížeči. Token se uloží do `.gdrive-token.json` — další spuštění jsou automatická.
+
+### Kompletní deploy workflow
+
+Pro jednotný agent workflow jsou v repu připravené skripty:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/deploy-complete.ps1 -Agent codex
+powershell -ExecutionPolicy Bypass -File scripts/deploy-complete.ps1 -Agent opencode
+```
+
+Nebo přes npm:
+
+```powershell
+npm run deploy:complete:codex
+npm run deploy:complete:opencode
+```
+
+Workflow provede:
+1. `npm run build`
+2. `npx cap sync android`
+3. `.\gradlew assembleDebug` v `android/`
+4. `npm run upload-apk`
+5. aktualizaci sekce `Deploy Status` v README
+6. git commit staged změn
+7. ntfy notifikaci na `ntfy.sh/Codex_done` nebo `ntfy.sh/OpenCode_done`
+
+Pokud rebuild APK neprojde, workflow se zastaví, nic nenahraje na Google Drive a odešle failure notifikaci.
 
 ### Regenerace ikon
 
