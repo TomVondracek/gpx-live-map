@@ -19,6 +19,10 @@ let notesPolyline = null;
 let arrowMarkers = [];
 let userScrolled = false;
 
+// Inkrementální synchronizace
+let lastTimestamp = null;   // ISO string posledního načteného záznamu (null = full load)
+let allPoints = [];         // kumulativní seznam všech validních bodů (s lat/lon)
+
 const WEATHER_ICONS = {
   0: "☀️",
   1: "🌤️", 2: "⛅", 3: "🌥️",

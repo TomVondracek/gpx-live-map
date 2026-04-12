@@ -54,12 +54,13 @@ function getMapToken() {
   return readStoredMapToken();
 }
 
-function getSheetDataUrl() {
+function getSheetDataUrl(since = null) {
   const token = getMapToken();
   if (!token) return null;
 
   const url = new URL(SHEET_URL);
   url.searchParams.set("token", token);
+  if (since) url.searchParams.set("since", since);
   return url.toString();
 }
 

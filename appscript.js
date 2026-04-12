@@ -306,7 +306,14 @@ function doGet(e) {
     }
 
     const data = sheet.getDataRange().getValues();
-    const rows = data.slice(1);
+    const allRows = data.slice(1);
+
+    // Inkrementální synchronizace: vrátit jen záznamy novější než ?since=<ISO>
+    // ISO timestamps jsou lexikograficky srovnatelné — string porovnání funguje správně.
+    const sinceParam = e && e.parameter ? String(e.parameter.since || "") : "";
+    const rows = sinceParam
+      ? allRows.filter((row) => String(row[0] || "") > sinceParam)
+      : allRows;
 
     const result = rows.map((row) => ({
       time: row[0],
