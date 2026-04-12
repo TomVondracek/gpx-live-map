@@ -1,18 +1,19 @@
 const SHEET_HEADERS_ = [
-  "time",
-  "lat",
-  "lon",
-  "note",
-  "battery",
-  "speed",
-  "altitude",
-  "weather_temp",
-  "weather_code",
-  "entry_type",
-  "audio_file_id",
-  "audio_mime",
-  "audio_duration_sec",
-  "photo_file_id",
+  "time",           // col 1  (index 0)
+  "lat",            // col 2  (index 1)
+  "lon",            // col 3  (index 2)
+  "note",           // col 4  (index 3)
+  "battery",        // col 5  (index 4)
+  "speed",          // col 6  (index 5)
+  "altitude",       // col 7  (index 6)
+  "weather_temp",   // col 8  (index 7)
+  "weather_code",   // col 9  (index 8)
+  "entry_type",     // col 10 (index 9)
+  "audio_file_id",  // col 11 (index 10)
+  "audio_mime",     // col 12 (index 11)
+  "audio_duration_sec", // col 13 (index 12)
+  "photo_file_id",  // col 14 (index 13)
+  "entry_id",       // col 15 (index 14) — klientské UUID pro deduplication
 ];
 
 const ENTRY_TYPE_TEXT_ = "text";
@@ -165,6 +166,29 @@ function isKnownAudioFileId_(sheet, fileId) {
   return values.some((row) => String(row[0] || "") === String(fileId));
 }
 
+/**
+ * Zkontroluje, zda entry_id již existuje v sheetu (posledních DEDUP_SCAN_ROWS řádků).
+ * Vrací true pokud je záznam duplikát — POST lze bezpečně ignorovat.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {string} entryId
+ * @returns {boolean}
+ */
+const DEDUP_SCAN_ROWS_ = 200;
+
+function isDuplicateEntryId_(sheet, entryId) {
+  if (!entryId) return false;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return false;
+
+  const startRow = Math.max(2, lastRow - DEDUP_SCAN_ROWS_ + 1);
+  const numRows = lastRow - startRow + 1;
+
+  // entry_id je ve sloupci 15 (index 14)
+  const values = sheet.getRange(startRow, 15, numRows, 1).getValues();
+  return values.some((row) => String(row[0] || "") === String(entryId));
+}
+
 function getWeatherSnapshot_(data) {
   let temp = "";
   let wcode = "";
@@ -217,6 +241,12 @@ function doPost(e) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     ensureHeaders_(sheet);
 
+    // Deduplication: pokud entry_id již existuje, vrátit ok bez zápisu
+    const entryId = String(data.entry_id || "");
+    if (entryId && isDuplicateEntryId_(sheet, entryId)) {
+      return jsonOutput_({ ok: true, duplicate: true });
+    }
+
     const weather = getWeatherSnapshot_(data);
     const entryType = normalizeEntryType_(data.entry_type);
 
@@ -251,6 +281,7 @@ function doPost(e) {
       audioMime,
       audioDurationSec,
       photoFileId,
+      entryId,
     ]);
 
     return jsonOutput_({ ok: true, entryType, audioFileId });
@@ -292,6 +323,7 @@ function doGet(e) {
       audio_mime: row[11] || "",
       audio_duration_sec: parseFloatOrNull_(row[12]),
       photo_file_id: row[13] || "",
+      entry_id: row[14] || "",
     }));
 
     return jsonOutput_(result);

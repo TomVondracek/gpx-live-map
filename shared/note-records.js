@@ -10,6 +10,7 @@ const NOTE_ENTRY_TYPES = Object.freeze([
 
 /**
  * @typedef {Object} BaseNotePayload
+ * @property {string} entry_id  - Klientem generované UUID; slouží k deduplication při retry/offline flush
  * @property {string} time
  * @property {number|null} lat
  * @property {number|null} lon
@@ -77,6 +78,7 @@ function isTextEntry(record) {
 function createTextPayload(basePayload, noteText) {
   return {
     ...basePayload,
+    entry_id: crypto.randomUUID(),
     entry_type: ENTRY_TYPE_TEXT,
     note: String(noteText || "").trim(),
   };
@@ -89,6 +91,7 @@ function createTextPayload(basePayload, noteText) {
 function createAudioPayload(basePayload, audioDraft) {
   return {
     ...basePayload,
+    entry_id: crypto.randomUUID(),
     entry_type: ENTRY_TYPE_AUDIO,
     note: "",
     audioBlob: audioDraft.blob,
@@ -105,6 +108,7 @@ function createAudioPayload(basePayload, audioDraft) {
 function createPhotoPayload(basePayload, photoDraft) {
   return {
     ...basePayload,
+    entry_id: crypto.randomUUID(),
     entry_type: ENTRY_TYPE_PHOTO,
     note: "",
     photo_base64: photoDraft.base64,
