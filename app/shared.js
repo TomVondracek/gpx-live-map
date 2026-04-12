@@ -1,10 +1,7 @@
 // ── Konfigurace ───────────────────────────────────────────────────────────────
-const APP_CONFIG = (typeof window !== "undefined" && window.RUN_NOTES_CONFIG) || {};
-const SHEET_URL =
-  APP_CONFIG.sheetUrl ||
-  "https://script.google.com/macros/s/AKfycbxZli-8aEpEKd6rV8pzFsC73EDI3h-dNIOmBBj4T967HKWxaL-a431b6C21QBOJpEWr/exec";
-const WRITE_TOKEN = APP_CONFIG.writeToken || APP_CONFIG.apiToken || "";
-const READ_TOKEN = APP_CONFIG.readToken || APP_CONFIG.mapToken || "";
+const SHEET_URL = PROJECT_CONFIG.sheetUrl;
+const WRITE_TOKEN = PROJECT_CONFIG.writeToken;
+const READ_TOKEN = PROJECT_CONFIG.readToken;
 
 const DB_NAME = "beh-poznamky-db";
 const STORE_NAME = "queue";

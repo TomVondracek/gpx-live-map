@@ -1,0 +1,382 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:       #e63946;
+      --red-dim:   rgba(230, 57, 70, 0.15);
+      --green:     #2a9d8f;
+      --green-dim: rgba(42, 157, 143, 0.15);
+      --bg:        #0f0f1a;
+      --bg2:       #181828;
+      --bg3:       #1e1e32;
+      --text:      #eaeaea;
+      --muted:     #6e7191;
+      --border:    rgba(255, 255, 255, 0.07);
+      --radius:    12px;
+      --panel-w:   320px;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: row;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    /* ── Mapa ── */
+    #map {
+      flex: 1;
+      height: 100vh;
+      transition: width 0.3s;
+      z-index: 1;
+    }
+
+    #map-back {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      left: 16px;
+      z-index: 100;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 10px 18px;
+      background: rgba(15, 15, 26, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    #map-back:active {
+      transform: scale(0.97);
+    }
+
+    /* ── Panel zpráv – desktop ── */
+    #notes-panel {
+      width: var(--panel-w);
+      height: 100vh;
+      background: rgba(15, 15, 26, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    /* ── Záhlaví panelu ── */
+    #notes-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #notes-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #notes-count {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--green);
+      background: var(--green-dim);
+      border-radius: 20px;
+      padding: 2px 9px;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    /* Tlačítko zavřít – jen na mobilu */
+    #notes-close {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.3rem;
+      cursor: pointer;
+      padding: 2px 6px;
+      line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Seznam zpráv ── */
+    #notes-list {
+      flex: 1;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 8px 0;
+    }
+
+    #notes-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    #notes-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #notes-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    /* ── Jednotlivá zpráva ── */
+    .note-item {
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+      border-left: 3px solid transparent;
+      position: relative;
+    }
+
+    .note-item:last-child {
+      border-bottom: none;
+    }
+
+    .note-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .note-item.active {
+      background: var(--green-dim);
+      border-left-color: var(--green);
+    }
+
+    .note-item.no-gps {
+      cursor: default;
+      opacity: 0.55;
+    }
+
+    .note-time {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+      letter-spacing: 0.02em;
+    }
+
+    .note-text {
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .note-text.empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .note-text.audio {
+      color: #f6d98f;
+      font-weight: 600;
+    }
+
+    .note-audio-row {
+      margin-top: 8px;
+    }
+
+    .note-audio-button {
+      border: 1px solid var(--border);
+      background: rgba(233, 196, 106, 0.12);
+      color: #f6d98f;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .note-audio-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .popup-audio {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 220px;
+    }
+
+    .popup-audio .note-audio-button {
+      background: #0f0f1a;
+      color: #f6d98f;
+      border: 1px solid #0f0f1a;
+    }
+
+    .popup-audio audio {
+      width: 100%;
+    }
+
+    /* ── Stav "žádné zprávy" ── */
+    #notes-empty {
+      display: none;
+      padding: 32px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    /* ── Plovoucí tlačítko – jen mobil ── */
+    #notes-fab {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      right: 16px;
+      z-index: 100;
+      background: rgba(15, 15, 26, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 10px 18px;
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    #notes-fab:active {
+      transform: scale(0.96);
+    }
+
+    #fab-count {
+      display: inline-block;
+      background: var(--green);
+      color: #fff;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 1px 7px;
+      margin-left: 6px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    /* ── Mobilní breakpoint ── */
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      #map {
+        width: 100vw;
+        height: 100vh;
+        flex: none;
+      }
+
+      #notes-fab {
+        display: flex;
+        align-items: center;
+      }
+
+      #map-back {
+        display: inline-flex;
+        align-items: center;
+      }
+
+      #notes-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 52vh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        border-radius: 16px 16px 0 0;
+        transform: translateY(100%);
+        transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 200;
+      }
+
+      #notes-panel.open {
+        transform: translateY(0);
+      }
+
+      #notes-close {
+        display: block;
+      }
+    }
+
+    /* ── Lightbox ────────────────────────────────────────────────────────── */
+    #lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.92);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    #lightbox.open {
+      display: flex;
+    }
+
+    #lightbox-img {
+      max-width: 96vw;
+      max-height: 88vh;
+      border-radius: 6px;
+      object-fit: contain;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+      cursor: default;
+      transition: opacity 0.2s;
+    }
+
+    #lightbox-caption {
+      margin-top: 12px;
+      color: rgba(255,255,255,0.75);
+      font-size: 13px;
+      text-align: center;
+      max-width: 90vw;
+    }
+
+    #lightbox-close {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.8);
+      font-size: 32px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: color 0.15s;
+    }
+
+    #lightbox-close:hover {
+      color: #fff;
+    }

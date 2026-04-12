@@ -148,13 +148,13 @@ async function swSyncRegister() {
 
 // ── Queue UI (správa čekající fronty) ─────────────────────────────────────────
 function formatQueueItemLabel(record) {
-  const type = record.payload && record.payload.entry_type;
-  if (type === "audio") {
+  const type = inferEntryType(record && record.payload);
+  if (type === ENTRY_TYPE_AUDIO) {
     const dur = record.payload.audioDurationSec || record.payload.audio_duration_sec;
     const durText = dur ? ` · ${formatAudioDuration(dur)}` : "";
     return { icon: "🎙", label: "Hlasová poznámka" + durText };
   }
-  if (type === "photo") {
+  if (type === ENTRY_TYPE_PHOTO) {
     return { icon: "📷", label: "Fotografie" };
   }
   const note = String(record.payload && record.payload.note || "").trim();

@@ -60,6 +60,13 @@ if (fs.existsSync(appDir)) {
   console.log("  app -> www/app");
 }
 
+// shared/ → www/shared/ (sdílená konfigurace a helpery)
+const sharedDir = path.join(ROOT, "shared");
+if (fs.existsSync(sharedDir)) {
+  copyDirRecursive(sharedDir, path.join(WWW, "shared"));
+  console.log("  shared -> www/shared");
+}
+
 // sw.js → www/sw.js (Service Worker pro Background Sync)
 const swJs = path.join(ROOT, "sw.js");
 if (fs.existsSync(swJs)) {
@@ -97,6 +104,13 @@ const vendorDir = path.join(ROOT, "vendor");
 if (fs.existsSync(vendorDir)) {
   copyDirRecursive(vendorDir, path.join(WWW, "vendor"));
   console.log("  vendor -> www/vendor");
+}
+
+// map/ → www/map/ (rozsekané skripty live mapy)
+const mapDir = path.join(ROOT, "map");
+if (fs.existsSync(mapDir)) {
+  copyDirRecursive(mapDir, path.join(WWW, "map"));
+  console.log("  map -> www/map");
 }
 
 console.log("Web assets copied to www/");

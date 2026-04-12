@@ -1,0 +1,686 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:       #e63946;
+      --red-dim:   rgba(230, 57, 70, 0.18);
+      --green:     #2a9d8f;
+      --green-dim: rgba(42, 157, 143, 0.18);
+      --bg:        #0f0f1a;
+      --bg2:       #181828;
+      --bg3:       #1e1e32;
+      --text:      #eaeaea;
+      --muted:     #6e7191;
+      --border:    rgba(255, 255, 255, 0.07);
+      --radius:    14px;
+      --radius-sm: 10px;
+    }
+
+    body {
+      background: radial-gradient(ellipse at 50% 25%, #1e2a4a 0%, #0f0f1a 70%);
+      background-attachment: fixed;
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    #desktop-notice {
+      display: none;
+      min-height: 100dvh;
+      padding: 32px 24px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #desktop-card {
+      width: min(520px, 100%);
+      background: rgba(15, 15, 26, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px 24px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      text-align: center;
+    }
+
+    #desktop-card h1 {
+      font-size: 1.35rem;
+      margin-bottom: 12px;
+    }
+
+    #desktop-card p {
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+
+    #desktop-card a {
+      color: var(--text);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 10px 18px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* ── Status bar ── */
+    #status-bar {
+      background: rgba(15, 15, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-align: center;
+      padding: 7px 16px;
+      letter-spacing: 0.03em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    #status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+      transition: background 0.4s;
+    }
+
+    #status-dot.offline {
+      background: var(--red);
+    }
+
+    /* ── Hlavní obsah ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 24px 20px;
+    }
+
+    /* ── Indikátor nahrávání ── */
+    #recording-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--red);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    #recording-indicator .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--red);
+      animation: pulse 1s infinite;
+    }
+
+    #recording-indicator.hidden { visibility: hidden; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    /* ── Hlavní tlačítka ── */
+    @keyframes record-glow {
+      0%, 100% { box-shadow: 0 0 18px 4px rgba(230, 57, 70, 0.45); }
+      50%       { box-shadow: 0 0 32px 10px rgba(230, 57, 70, 0.75); }
+    }
+
+    #capture-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px 24px;
+      width: fit-content;
+      margin: 0 auto;
+      justify-items: center;
+    }
+
+    #btn-record {
+      grid-column: 1 / -1; /* Roztáhne se přes oba sloupce (bude nahoře uprostřed) */
+    }
+
+    .capture-btn {
+      width: min(40vw, 152px);
+      height: min(40vw, 152px);
+      border-radius: 50%;
+      border: 3px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, transform 0.1s, box-shadow 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      box-shadow: 0 0 12px 2px rgba(0, 0, 0, 0.18);
+    }
+
+    .capture-btn:active { transform: scale(0.95); }
+
+    #btn-record {
+      border-color: var(--red);
+      background: var(--red-dim);
+      color: var(--red);
+      box-shadow: 0 0 12px 2px rgba(230, 57, 70, 0.2);
+    }
+
+    #btn-record.recording {
+      background: var(--red);
+      color: #fff;
+      animation: record-glow 1.2s ease-in-out infinite;
+    }
+
+    #btn-audio {
+      border-color: rgba(233, 196, 106, 0.5);
+      background: rgba(233, 196, 106, 0.12);
+      color: #f6d98f;
+      box-shadow: 0 0 12px 2px rgba(233, 196, 106, 0.14);
+    }
+
+    #btn-audio.recording {
+      background: #e9c46a;
+      color: #241700;
+      box-shadow: 0 0 28px 8px rgba(233, 196, 106, 0.4);
+    }
+
+    #btn-photo {
+      border-color: rgba(42, 157, 143, 0.5);
+      background: var(--green-dim);
+      color: #5cdbca;
+      box-shadow: 0 0 12px 2px rgba(42, 157, 143, 0.14);
+    }
+
+    .capture-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      animation: none;
+    }
+
+    /* ── Přepis textu ── */
+    #transcript {
+      width: 100%;
+      min-height: 80px;
+      max-height: 40vh;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-size: 1rem;
+      line-height: 1.5;
+      resize: vertical;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+
+    #transcript.hidden {
+      display: none;
+    }
+
+    #transcript::placeholder {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    #transcript:read-only {
+      opacity: 0.85;
+    }
+
+    #transcript:not(:read-only) {
+      border-color: rgba(42, 157, 143, 0.5);
+    }
+
+    #transcript:not(:read-only):focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(42, 157, 143, 0.15);
+    }
+
+    #audio-preview {
+      width: 100%;
+      max-width: 480px;
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #audio-preview.hidden {
+      display: none;
+    }
+
+    #audio-preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    #audio-preview-meta {
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    #audio-player {
+      width: 100%;
+    }
+
+    #photo-preview {
+      width: 100%;
+      max-width: 480px;
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #photo-preview.hidden {
+      display: none;
+    }
+
+    #photo-preview-img {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+
+    /* ── Diagnostika STT ── */
+    #diagnostics {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+    }
+
+    #diagnostics summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #diagnostics summary::marker,
+    #diagnostics summary::-webkit-details-marker {
+      display: none;
+    }
+
+    #diagnostics summary::before {
+      content: "▸";
+      display: inline-block;
+      transition: transform 0.2s;
+      color: var(--muted);
+    }
+
+    #diagnostics[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    #diagnostics[open] #diagnostics-body {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    #diagnostics-body {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .diag-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.85rem;
+      line-height: 1.35;
+    }
+
+    .diag-label {
+      color: var(--muted);
+      flex: 0 0 42%;
+    }
+
+    .diag-value {
+      color: var(--text);
+      text-align: right;
+      word-break: break-word;
+    }
+
+    /* ── Sekce potvrzení ── */
+    #section-confirm {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    #section-confirm.hidden { display: none; }
+
+    .btn {
+      flex: 1;
+      padding: 15px 20px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+    }
+
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #btn-send {
+      background: linear-gradient(135deg, #2ab5a5, #1f8a7d);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(42, 157, 143, 0.35);
+    }
+
+    #btn-send:active {
+      box-shadow: 0 2px 8px rgba(42, 157, 143, 0.25);
+    }
+
+    #btn-discard {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Zprávy ── */
+    #section-error {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(230, 57, 70, 0.1);
+      border: 1px solid rgba(230, 57, 70, 0.4);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      color: #ffaaaa;
+      line-height: 1.4;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      backdrop-filter: blur(4px);
+    }
+
+    #section-error::before {
+      content: "⚠";
+      flex-shrink: 0;
+      font-size: 1rem;
+      opacity: 0.8;
+    }
+
+    #section-error.hidden { display: none; }
+
+    #section-success {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(42, 157, 143, 0.1);
+      border: 1px solid rgba(42, 157, 143, 0.4);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      color: #88ffcc;
+      text-align: center;
+      font-weight: 600;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+
+    #section-success::before {
+      content: "✓";
+      flex-shrink: 0;
+      font-size: 1.1rem;
+    }
+
+    #section-success.hidden { display: none; }
+
+    /* ── Queue badge (klikatelný počet čekajících) ── */
+    #queue-badge {
+      background: rgba(233, 196, 106, 0.18);
+      border: 1px solid rgba(233, 196, 106, 0.45);
+      border-radius: 999px;
+      color: #f6d98f;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 2px 10px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: background 0.2s;
+    }
+
+    #queue-badge:active {
+      background: rgba(233, 196, 106, 0.32);
+    }
+
+    /* ── GPS accuracy badge ── */
+    #gps-badge {
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+    }
+
+    #gps-badge.gps-badge-good {
+      background: rgba(42, 157, 143, 0.18);
+      border: 1px solid rgba(42, 157, 143, 0.45);
+      color: #4ecdc4;
+    }
+
+    #gps-badge.gps-badge-ok {
+      background: rgba(233, 196, 106, 0.15);
+      border: 1px solid rgba(233, 196, 106, 0.35);
+      color: #f6d98f;
+    }
+
+    #gps-badge.gps-badge-bad {
+      background: rgba(230, 57, 70, 0.15);
+      border: 1px solid rgba(230, 57, 70, 0.35);
+      color: #ff6b6b;
+    }
+
+    /* ── Queue overlay + panel ── */
+    #queue-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 100;
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+
+    #queue-overlay.hidden { display: none; }
+
+    #queue-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 101;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-radius: 18px 18px 0 0;
+      max-height: 65vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+      animation: slideUp 0.22s ease-out;
+    }
+
+    #queue-panel.hidden { display: none; }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+
+    #queue-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 1rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    #queue-panel-close {
+      background: rgba(255, 255, 255, 0.07);
+      border: none;
+      border-radius: 50%;
+      color: var(--muted);
+      width: 30px;
+      height: 30px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s;
+    }
+
+    #queue-panel-close:active { background: rgba(255, 255, 255, 0.14); }
+
+    #queue-list {
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+      padding: 8px 0;
+    }
+
+    #queue-empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 24px 20px;
+    }
+
+    #queue-empty.hidden { display: none; }
+
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .queue-item:last-child { border-bottom: none; }
+
+    .queue-item-icon {
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+
+    .queue-item-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .queue-item-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-item-meta {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .queue-item-delete {
+      background: rgba(230, 57, 70, 0.12);
+      border: 1px solid rgba(230, 57, 70, 0.35);
+      border-radius: var(--radius-sm);
+      color: #ff8a8a;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: background 0.2s;
+    }
+
+    .queue-item-delete:active { background: rgba(230, 57, 70, 0.28); }
+
+    /* ── Footer odkaz na mapu ── */
+    footer {
+      text-align: center;
+      padding: 12px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: none;
+      opacity: 0.55;
+      transition: opacity 0.2s;
+    }
+
+    footer a:hover, footer a:focus {
+      opacity: 1;
+    }
+
+    @media (min-width: 769px) and (pointer: fine) {
+      #status-bar,
+      main,
+      footer {
+        display: none;
+      }
+
+      #desktop-notice {
+        display: flex;
+      }
+    }

@@ -15,6 +15,10 @@ const SHEET_HEADERS_ = [
   "photo_file_id",
 ];
 
+const ENTRY_TYPE_TEXT_ = "text";
+const ENTRY_TYPE_AUDIO_ = "audio";
+const ENTRY_TYPE_PHOTO_ = "photo";
+
 function jsonOutput_(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(
     ContentService.MimeType.JSON,
@@ -139,10 +143,18 @@ function createPhotoFile_(data) {
 }
 
 function entryTypeFromRow_(row) {
-  if (row[9]) return String(row[9]);
-  if (row[10]) return "audio";
-  if (row[13]) return "photo";
-  return "text";
+  if (row[9]) return normalizeEntryType_(row[9]);
+  if (row[10]) return ENTRY_TYPE_AUDIO_;
+  if (row[13]) return ENTRY_TYPE_PHOTO_;
+  return ENTRY_TYPE_TEXT_;
+}
+
+function normalizeEntryType_(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === ENTRY_TYPE_AUDIO_ || normalized === ENTRY_TYPE_PHOTO_) {
+    return normalized;
+  }
+  return ENTRY_TYPE_TEXT_;
 }
 
 function isKnownAudioFileId_(sheet, fileId) {
@@ -206,21 +218,19 @@ function doPost(e) {
     ensureHeaders_(sheet);
 
     const weather = getWeatherSnapshot_(data);
-    let entryType = "text";
-    if (String(data.entry_type) === "audio") entryType = "audio";
-    else if (String(data.entry_type) === "photo") entryType = "photo";
+    const entryType = normalizeEntryType_(data.entry_type);
 
     let audioFileId = "";
     let audioMime = "";
     let audioDurationSec = "";
     let photoFileId = "";
 
-    if (entryType === "audio") {
+    if (entryType === ENTRY_TYPE_AUDIO_) {
       const audioFile = createAudioFile_(data);
       audioFileId = audioFile.getId();
       audioMime = String(data.audio_mime || audioFile.getMimeType() || "");
       audioDurationSec = data.audio_duration_sec != null ? data.audio_duration_sec : "";
-    } else if (entryType === "photo") {
+    } else if (entryType === ENTRY_TYPE_PHOTO_) {
       const photoFile = createPhotoFile_(data);
       photoFileId = photoFile.getId();
       photoFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
@@ -230,7 +240,7 @@ function doPost(e) {
       data.time || new Date().toISOString(),
       data.lat != null ? data.lat : "",
       data.lon != null ? data.lon : "",
-      (entryType === "audio" || entryType === "photo") ? "" : neutralizeSpreadsheetFormula_(data.note),
+      (entryType === ENTRY_TYPE_AUDIO_ || entryType === ENTRY_TYPE_PHOTO_) ? "" : neutralizeSpreadsheetFormula_(data.note),
       data.battery ?? "",
       data.speed ?? "",
       data.altitude ?? "",

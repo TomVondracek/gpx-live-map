@@ -62,29 +62,11 @@ async function sendNote() {
     let payload;
 
     if (hasPhotoNote) {
-      payload = {
-        ...basePayload,
-        entry_type: "photo",
-        note: "",
-        photo_base64: pendingPhoto.base64,
-        photo_mime: pendingPhoto.mimeType,
-      };
+      payload = createPhotoPayload(basePayload, pendingPhoto);
     } else if (hasAudioNote) {
-      payload = {
-        ...basePayload,
-        entry_type: "audio",
-        note: "",
-        audioBlob: pendingAudioNote.blob,
-        audioMime: pendingAudioNote.mimeType,
-        audioDurationSec: pendingAudioNote.durationSec,
-        audioFileName: pendingAudioNote.fileName,
-      };
+      payload = createAudioPayload(basePayload, pendingAudioNote);
     } else {
-      payload = {
-        ...basePayload,
-        entry_type: "text",
-        note,
-      };
+      payload = createTextPayload(basePayload, note);
     }
 
     if (isOnline) {
