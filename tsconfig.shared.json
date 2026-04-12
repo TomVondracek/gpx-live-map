@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": "./www",
+    "declaration": false,
+    "removeComments": false
+  },
+  "include": [
+    "shared/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

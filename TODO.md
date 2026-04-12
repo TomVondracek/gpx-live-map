@@ -61,7 +61,7 @@ Priority:
 ### Příští úkoly
 
 - [x] `P1` Rozdělit `app.js` do menších modulů podle domén (`audio`, `photo`, `gps`, `queue`, `network`, `ui`, `api`).
-- [ ] `P1` Začít postupný přepis do TypeScriptu od sdílených datových typů a API payloadů.
+- [x] `P1` Začít postupný přepis do TypeScriptu od sdílených datových typů a API payloadů.
 - [x] `P2` Rozdělit logiku live mapy z `index.html` do samostatného JS souboru / modulů.
 - [ ] `P2` Přidat základní smoke/e2e testy pro hlavní scénáře: online text, offline audio, reconnect flush, foto upload.
 - [ ] `P3` Připravit release workflow pro build APK + upload artefaktu.

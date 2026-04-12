@@ -5,23 +5,37 @@
  * DŮLEŽITÉ: app.html se kopíruje jako index.html (Capacitor entry point).
  * Původní index.html (mapa) se kopíruje jako map.html.
  * Odkaz na mapu se v index.html automaticky opraví.
+ *
+ * TypeScript: shared/*.ts jsou kompilovány přímo do www/shared/ pomocí
+ * tsconfig.shared.json. Soubory .ts se z shared/ nekopírují ručně.
  */
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const WWW = path.join(ROOT, "www");
 const DEFAULT_RUNTIME_CONFIG = "window.RUN_NOTES_CONFIG = window.RUN_NOTES_CONFIG || {};\n";
 
-function copyDirRecursive(src, dest) {
+// ── TypeScript: zkompilovat shared/*.ts → www/shared/ ────────────────────────
+console.log("  tsc: compiling shared/*.ts -> www/shared/");
+execSync("npx tsc --project tsconfig.shared.json", {
+  stdio: "inherit",
+  cwd: ROOT,
+});
+
+function copyDirRecursive(src, dest, options = {}) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
 
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    // Přeskočit .ts soubory — ty jsou řešeny přes tsc (výše)
+    if (options.skipTs && entry.isFile() && entry.name.endsWith(".ts")) continue;
+
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath);
+      copyDirRecursive(srcPath, destPath, options);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
@@ -60,10 +74,10 @@ if (fs.existsSync(appDir)) {
   console.log("  app -> www/app");
 }
 
-// shared/ → www/shared/ (sdílená konfigurace a helpery)
+// shared/ → www/shared/ — .ts soubory jsou již zkompilované přes tsc výše
 const sharedDir = path.join(ROOT, "shared");
 if (fs.existsSync(sharedDir)) {
-  copyDirRecursive(sharedDir, path.join(WWW, "shared"));
+  copyDirRecursive(sharedDir, path.join(WWW, "shared"), { skipTs: true });
   console.log("  shared -> www/shared");
 }
 

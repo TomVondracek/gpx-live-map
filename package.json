@@ -11,7 +11,8 @@
     "deploy:complete:codex": "powershell -ExecutionPolicy Bypass -File scripts/deploy-complete.ps1 -Agent codex",
     "deploy:complete:opencode": "powershell -ExecutionPolicy Bypass -File scripts/deploy-complete.ps1 -Agent opencode",
     "upload-apk": "node scripts/upload-apk.js",
-    "generate-icons": "node scripts/generate-icons.js"
+    "generate-icons": "node scripts/generate-icons.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",
