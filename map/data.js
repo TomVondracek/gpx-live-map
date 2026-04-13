@@ -40,7 +40,6 @@ function initializeGpxLayer() {
 
     if (allRecords.length > 0) {
       renderPlaybackState({ preserveOpenPopup: true });
-      updateSummaryPanel();
     }
   }).addTo(map);
 }
@@ -243,7 +242,6 @@ function renderPlaybackState(options = {}) {
     renderVisibleMapState(visiblePoints, options);
     renderNotesList(visibleRecords);
     syncTimelineControls();
-    updateSummaryPanel();
   } finally {
     isRefreshingMarkers = false;
   }
@@ -254,7 +252,6 @@ function resetRenderedDataset() {
   allPoints = [];
   lastTimestamp = null;
   clearRenderedMapState();
-  updateSummaryPanel();
 }
 
 async function loadFull() {
