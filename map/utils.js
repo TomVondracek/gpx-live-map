@@ -106,6 +106,54 @@ function compareRecordTimes(a, b) {
   return String(a || "").localeCompare(String(b || ""), "cs");
 }
 
+function formatRelativeTimeFromNow(raw) {
+  const value = getTimeValue(raw);
+  if (value == null) return "—";
+
+  const deltaSeconds = Math.max(0, Math.round((Date.now() - value) / 1000));
+  if (deltaSeconds < 45) return "právě teď";
+
+  const deltaMinutes = Math.round(deltaSeconds / 60);
+  if (deltaMinutes < 60) {
+    return `před ${deltaMinutes} min`;
+  }
+
+  const deltaHours = Math.round(deltaMinutes / 60);
+  if (deltaHours < 24) {
+    return `před ${deltaHours} h`;
+  }
+
+  const deltaDays = Math.round(deltaHours / 24);
+  return `před ${deltaDays} d`;
+}
+
+function formatLatLon(lat, lon) {
+  if (lat == null || lon == null) return "—";
+  return `${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)}`;
+}
+
+function formatPaceFromSpeed(speedKmh) {
+  const speed = Number(speedKmh);
+  if (!Number.isFinite(speed) || speed <= 0) return "—";
+
+  const totalSeconds = Math.round((3600 / speed));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")} /km`;
+}
+
+function formatSpeedText(speedKmh) {
+  const speed = Number(speedKmh);
+  if (!Number.isFinite(speed) || speed <= 0) return "—";
+  return `${speed.toFixed(1)} km/h`;
+}
+
+function formatRouteDistance(routeKm) {
+  const value = Number(routeKm);
+  if (!Number.isFinite(value)) return "—";
+  return `${value.toFixed(1)} km`;
+}
+
 function syncActiveNoteUI() {
   document.querySelectorAll(".note-item").forEach((el) => {
     el.classList.toggle("active", el.dataset.pointKey === activePointKey);

@@ -24,8 +24,8 @@ Priority:
 
 ### Příští úkoly
 
-- [ ] `P2` Přidat timeline / scrubber pro přehrání průběhu běhu zpětně.
-- [ ] `P2` Přidat souhrnný horní panel: poslední známá poloha, stav baterie, čas od posledního kontaktu, aktuální tempo, vzdálenost po trase.
+- [x] `P2` Přidat timeline / scrubber pro přehrání průběhu běhu zpětně.
+- [x] `P2` Přidat souhrnný horní panel: poslední známá poloha, stav baterie, čas od posledního kontaktu, aktuální tempo, vzdálenost po trase.
 - [ ] `P2` Dopočítávat ETA do cíle a případně na další checkpoint.
 
 ### Hotovo

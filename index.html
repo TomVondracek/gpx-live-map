@@ -17,6 +17,33 @@
 <body>
 
 <div id="map"></div>
+<div id="summary-shell" aria-label="Souhrn běhu">
+  <div class="summary-card">
+    <div class="summary-label">Poslední poloha</div>
+    <div id="summary-location" class="summary-value">Čekám na data…</div>
+    <div id="summary-location-sub" class="summary-subvalue">—</div>
+  </div>
+  <div class="summary-card">
+    <div class="summary-label">Baterie</div>
+    <div id="summary-battery" class="summary-value">—</div>
+    <div id="summary-battery-sub" class="summary-subvalue">Poslední známý stav</div>
+  </div>
+  <div class="summary-card">
+    <div class="summary-label">Poslední kontakt</div>
+    <div id="summary-contact" class="summary-value">—</div>
+    <div id="summary-contact-sub" class="summary-subvalue">—</div>
+  </div>
+  <div class="summary-card">
+    <div class="summary-label">Tempo</div>
+    <div id="summary-pace" class="summary-value">—</div>
+    <div id="summary-pace-sub" class="summary-subvalue">—</div>
+  </div>
+  <div class="summary-card">
+    <div class="summary-label">Po trase</div>
+    <div id="summary-route" class="summary-value">—</div>
+    <div id="summary-route-sub" class="summary-subvalue">Vzdálenost od startu</div>
+  </div>
+</div>
 <div id="timeline-shell" aria-label="Časová osa běhu">
   <div id="timeline-topbar">
     <div id="timeline-mode">Živě</div>
@@ -70,6 +97,7 @@
 <script src="./map/lightbox.js"></script>
 <script src="./map/tokens.js"></script>
 <script src="./map/utils.js"></script>
+<script src="./map/summary.js"></script>
 <script src="./map/timeline.js"></script>
 <script src="./map/audio.js"></script>
 <script src="./map/panel.js"></script>
