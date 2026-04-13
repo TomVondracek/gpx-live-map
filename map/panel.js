@@ -4,13 +4,13 @@ notesList.addEventListener("scroll", () => {
   userScrolled = notesList.scrollTop > 40;
 }, { passive: true });
 
-function renderNotesList(validPoints) {
+function renderNotesList(records) {
   const list = document.getElementById("notes-list");
   const empty = document.getElementById("notes-empty");
   const countBadge = document.getElementById("notes-count");
   const fabCount = document.getElementById("fab-count");
 
-  const reversed = [...validPoints].reverse();
+  const reversed = [...records].reverse();
 
   countBadge.textContent = reversed.length;
   fabCount.textContent = reversed.length;
@@ -25,7 +25,7 @@ function renderNotesList(validPoints) {
   Array.from(list.querySelectorAll(".note-item")).forEach((el) => el.remove());
 
   reversed.forEach((point) => {
-    const hasGps = point.lat !== null && point.lat !== "" && point.lon !== null && point.lon !== "";
+    const hasGps = hasValidCoordinates(point);
     const pointKey = getPointKey(point);
     const entryType = getEntryType(point);
 
@@ -104,6 +104,13 @@ function renderNotesList(validPoints) {
         const lat = Number(point.lat);
         const lon = Number(point.lon);
         activePointKey = pointKey;
+        if (playbackMode === "history") {
+          const pointIndex = playbackPoints.findIndex((candidate) => getPointKey(candidate) === pointKey);
+          if (pointIndex !== -1) {
+            playbackIndex = pointIndex;
+            syncTimelineControls();
+          }
+        }
         syncActiveNoteUI();
 
         map.setView([lat, lon], 15, { animate: true });

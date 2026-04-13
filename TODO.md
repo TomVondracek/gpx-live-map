@@ -10,8 +10,6 @@ Priority:
 
 ### Příští úkoly
 
-- [ ] `P2` Přidat nouzový režim / rychlé tlačítko `SOS`, které uloží prioritní událost do mapy.
-
 ### Hotovo
 
 - [x] `P1` Přidat klientský `entry_id` ke každé poznámce a připravit payload tak, aby šel bezpečně deduplikovat při retry/offline flush.
@@ -26,10 +24,7 @@ Priority:
 
 ### Příští úkoly
 
-- [x] `P1` Přepsat refresh mapy na inkrementální synchronizaci místo pravidelného stahování celého datasetu.
-- [x] `P1` Přidat serverovou/klientskou podporu pro `since` / `lastId` / `lastTimestamp`, aby se po 10 s dotahovaly jen nové body.
 - [ ] `P2` Přidat timeline / scrubber pro přehrání průběhu běhu zpětně.
-- [ ] `P2` Přidat filtry poznámek podle typu obsahu: text / audio / foto / prioritní události.
 - [ ] `P2` Přidat souhrnný horní panel: poslední známá poloha, stav baterie, čas od posledního kontaktu, aktuální tempo, vzdálenost po trase.
 - [ ] `P2` Dopočítávat ETA do cíle a případně na další checkpoint.
 
@@ -39,6 +34,8 @@ Priority:
 - [x] Spojnice bodů na mapě mezi zaznamenanými pozicemi.
 - [x] Audio přehrávání přímo z popupu / side panelu.
 - [x] Pozastavení refreshe mapy během přehrávání audio poznámky.
+- [x] `P1` Přepsat refresh mapy na inkrementální synchronizaci místo pravidelného stahování celého datasetu.
+- [x] `P1` Přidat serverovou/klientskou podporu pro `since` / `lastId` / `lastTimestamp`, aby se po 10 s dotahovaly jen nové body.
 
 ## Backend / Data / Bezpečnost
 

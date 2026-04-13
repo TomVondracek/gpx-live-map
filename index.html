@@ -17,6 +17,27 @@
 <body>
 
 <div id="map"></div>
+<div id="timeline-shell" aria-label="Časová osa běhu">
+  <div id="timeline-topbar">
+    <div id="timeline-mode">Živě</div>
+    <div id="timeline-current">Čekám na data…</div>
+  </div>
+  <input
+    id="timeline-slider"
+    type="range"
+    min="0"
+    max="0"
+    value="0"
+    step="1"
+    disabled
+    aria-label="Timeline průběhu běhu"
+  />
+  <div id="timeline-footer">
+    <button id="timeline-play" type="button" disabled>Přehrát</button>
+    <button id="timeline-live" type="button" class="active" disabled>Živě</button>
+    <div id="timeline-range">0 / 0 bodů</div>
+  </div>
+</div>
 <button id="map-back" type="button" aria-label="Vrátit se na hlavní obrazovku">← Zpět</button>
 
 <!-- Lightbox pro fotky -->
@@ -49,6 +70,7 @@
 <script src="./map/lightbox.js"></script>
 <script src="./map/tokens.js"></script>
 <script src="./map/utils.js"></script>
+<script src="./map/timeline.js"></script>
 <script src="./map/audio.js"></script>
 <script src="./map/panel.js"></script>
 <script src="./map/data.js"></script>

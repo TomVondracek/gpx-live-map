@@ -18,32 +18,32 @@ function initializeGpxLayer() {
     let lastPt = null;
 
     layers.forEach((layer) => {
-      if (layer instanceof L.Polyline) {
-        const latlngs = layer.getLatLngs();
-        const flatten = (arr) => {
-          if (arr.length > 0 && Array.isArray(arr[0])) {
-            arr.forEach(flatten);
-          } else if (arr.length > 0) {
-            arr.forEach((ll) => {
-              if (lastPt) {
-                cumulativeDist += getDistanceFromLatLonInMeters(lastPt.lat, lastPt.lng, ll.lat, ll.lng);
-              }
-              gpxPoints.push({ lat: ll.lat, lon: ll.lng, km: cumulativeDist / 1000 });
-              lastPt = ll;
-            });
+      if (!(layer instanceof L.Polyline)) return;
+
+      const flatten = (latlngGroups) => {
+        if (latlngGroups.length > 0 && Array.isArray(latlngGroups[0])) {
+          latlngGroups.forEach(flatten);
+          return;
+        }
+
+        latlngGroups.forEach((ll) => {
+          if (lastPt) {
+            cumulativeDist += getDistanceFromLatLonInMeters(lastPt.lat, lastPt.lng, ll.lat, ll.lng);
           }
-        };
-        flatten(latlngs);
-      }
+          gpxPoints.push({ lat: ll.lat, lon: ll.lng, km: cumulativeDist / 1000 });
+          lastPt = ll;
+        });
+      };
+
+      flatten(layer.getLatLngs());
     });
 
-    if (markers.length > 0) {
-      loadData();
+    if (allRecords.length > 0) {
+      renderPlaybackState({ preserveOpenPopup: true });
     }
   }).addTo(map);
 }
 
-// ── Pomocná funkce: vytvoří a přidá marker na mapu ────────────────────────────
 function createMarker(point, isLast) {
   const lat = Number(point.lat);
   const lon = Number(point.lon);
@@ -86,7 +86,6 @@ function createMarker(point, isLast) {
   return marker;
 }
 
-// ── Pomocná funkce: přidá šipky směru pro nové segmenty polyline ──────────────
 function addArrowsForSegments(latlngs, fromIndex) {
   for (let i = fromIndex; i < latlngs.length - 1; i++) {
     const a = latlngs[i];
@@ -112,187 +111,200 @@ function addArrowsForSegments(latlngs, fromIndex) {
   }
 }
 
-// ── Full load: stáhne celý dataset, resetuje mapu ─────────────────────────────
-async function loadFull() {
+function clearRenderedMapState() {
+  markers.forEach((marker) => map.removeLayer(marker));
+  markers = [];
+  markerByPointKey = new Map();
+
+  if (notesPolyline) {
+    map.removeLayer(notesPolyline);
+    notesPolyline = null;
+  }
+
+  arrowMarkers.forEach((marker) => map.removeLayer(marker));
+  arrowMarkers = [];
+}
+
+function sortRecords(records) {
+  return [...records].sort((left, right) => compareRecordTimes(left && left.time, right && right.time));
+}
+
+function mergeRecords(existingRecords, incomingRecords) {
+  const merged = new Map();
+
+  [...existingRecords, ...incomingRecords].forEach((record) => {
+    if (!record) return;
+    merged.set(getPointKey(record), record);
+  });
+
+  return sortRecords(Array.from(merged.values()));
+}
+
+function updateLastTimestampFromRecords(records) {
+  const timestamps = records
+    .map((record) => String(record && record.time || ""))
+    .filter(Boolean)
+    .sort((a, b) => compareRecordTimes(a, b));
+
+  lastTimestamp = timestamps.length > 0 ? timestamps[timestamps.length - 1] : null;
+}
+
+function applyFetchedRecords(records) {
+  allRecords = sortRecords(records.filter((record) => record != null));
+  allPoints = allRecords.filter(hasValidCoordinates);
+  updateLastTimestampFromRecords(allRecords);
+
+  if (!hasShownInitialLatestPopup && allPoints.length > 0) {
+    activePointKey = getPointKey(allPoints[allPoints.length - 1]);
+    hasShownInitialLatestPopup = true;
+  }
+
+  syncPlaybackDataset(allPoints);
+  renderPlaybackState({ preserveOpenPopup: true });
+}
+
+function resolveVisibleActivePoint(visiblePoints) {
+  if (visiblePoints.length === 0) {
+    activePointKey = null;
+    return null;
+  }
+
+  const activeVisiblePoint = visiblePoints.find((point) => getPointKey(point) === activePointKey);
+  if (activeVisiblePoint) {
+    return activeVisiblePoint;
+  }
+
+  if (playbackMode === "history" && playbackIndex != null && playbackPoints[playbackIndex]) {
+    const selectedKey = getPointKey(playbackPoints[playbackIndex]);
+    const selectedVisiblePoint = visiblePoints.find((point) => getPointKey(point) === selectedKey);
+    if (selectedVisiblePoint) {
+      activePointKey = selectedKey;
+      return selectedVisiblePoint;
+    }
+  }
+
+  const fallbackPoint = visiblePoints[visiblePoints.length - 1];
+  activePointKey = getPointKey(fallbackPoint);
+  return fallbackPoint;
+}
+
+function renderVisibleMapState(visiblePoints, options = {}) {
+  clearRenderedMapState();
+
+  if (visiblePoints.length >= 2) {
+    const latlngs = visiblePoints.map((point) => [Number(point.lat), Number(point.lon)]);
+    notesPolyline = L.polyline(latlngs, {
+      color: "#22d3ee",
+      weight: 2,
+      opacity: 0.5,
+      dashArray: "6, 6",
+    }).addTo(map);
+    addArrowsForSegments(latlngs, 0);
+  }
+
+  visiblePoints.forEach((point, index) => {
+    const marker = createMarker(point, index === visiblePoints.length - 1);
+    markers.push(marker);
+  });
+
+  if (visiblePoints.length > 0 && !firstFitDone) {
+    const bounds = L.latLngBounds(visiblePoints.map((point) => [Number(point.lat), Number(point.lon)]));
+    if (bounds.isValid()) {
+      map.fitBounds(bounds.pad(0.2));
+      firstFitDone = true;
+    }
+  }
+
+  const activeVisiblePoint = resolveVisibleActivePoint(visiblePoints);
+  if (!activeVisiblePoint) return;
+
+  const activeMarker = markerByPointKey.get(getPointKey(activeVisiblePoint));
+  if (!activeMarker) return;
+
+  if (options.centerSelected) {
+    map.setView([Number(activeVisiblePoint.lat), Number(activeVisiblePoint.lon)], 15, { animate: true });
+  } else if (options.centerLatest) {
+    const lastPoint = visiblePoints[visiblePoints.length - 1];
+    map.setView([Number(lastPoint.lat), Number(lastPoint.lon)], 15, { animate: true });
+  }
+
+  if (options.preserveOpenPopup !== false || playbackMode === "history") {
+    activeMarker.openPopup();
+  }
+}
+
+function renderPlaybackState(options = {}) {
+  const visibleRecords = getPlaybackVisibleRecords(allRecords);
+  const visiblePoints = getPlaybackVisibleGpsPoints(allPoints);
+
   isRefreshingMarkers = true;
   try {
-    const dataUrl = getSheetDataUrl();
-    if (!dataUrl) {
-      setNotesStatus("Chybí přístupový token. Otevři mapu s #token=... v URL.");
-      return;
-    }
-
-    const res = await fetch(dataUrl, { cache: "no-store" });
-    const data = await res.json();
-    if (!Array.isArray(data)) {
-      throw new Error(data && data.error ? data.error : "Neplatná odpověď serveru.");
-    }
-
-    // Reset mapy
-    markers.forEach((m) => map.removeLayer(m));
-    markers = [];
-    markerByPointKey = new Map();
-    if (notesPolyline) { map.removeLayer(notesPolyline); notesPolyline = null; }
-    arrowMarkers.forEach((m) => map.removeLayer(m));
-    arrowMarkers = [];
-    allPoints = [];
-    lastTimestamp = null;
-
-    const validPoints = data.filter((point) =>
-      point &&
-      point.lat !== null &&
-      point.lon !== null &&
-      point.lat !== "" &&
-      point.lon !== "" &&
-      !Number.isNaN(Number(point.lat)) &&
-      !Number.isNaN(Number(point.lon))
-    );
-
-    // Polyline + šipky
-    if (validPoints.length >= 2) {
-      const latlngs = validPoints.map((p) => [Number(p.lat), Number(p.lon)]);
-      notesPolyline = L.polyline(latlngs, {
-        color: "#22d3ee",
-        weight: 2,
-        opacity: 0.5,
-        dashArray: "6, 6",
-      }).addTo(map);
-      addArrowsForSegments(latlngs, 0);
-    }
-
-    // Markery
-    validPoints.forEach((point, index) => {
-      const isLast = index === validPoints.length - 1;
-      const marker = createMarker(point, isLast);
-      markers.push(marker);
-    });
-
-    // Uložit stav pro inkrementální sync
-    allPoints = validPoints;
-    const timestamps = data.map((p) => String(p && p.time || "")).filter(Boolean).sort();
-    if (timestamps.length > 0) {
-      lastTimestamp = timestamps[timestamps.length - 1];
-    }
-
-    // Fit bounds
-    if (validPoints.length > 0 && !firstFitDone) {
-      const bounds = L.latLngBounds(validPoints.map((p) => [Number(p.lat), Number(p.lon)]));
-      if (bounds.isValid()) {
-        map.fitBounds(bounds.pad(0.2));
-        firstFitDone = true;
-      }
-    }
-
-    if (!hasShownInitialLatestPopup && validPoints.length > 0) {
-      activePointKey = getPointKey(validPoints[validPoints.length - 1]);
-      hasShownInitialLatestPopup = true;
-    }
-
-    if (activePointKey) {
-      const activeMarker = markerByPointKey.get(activePointKey);
-      if (activeMarker) activeMarker.openPopup();
-    }
-
-    renderNotesList(data.filter((p) => p != null));
-  } catch (error) {
-    console.error("Načtení mapových dat selhalo:", error);
-    setNotesStatus("Nepodařilo se načíst poznámky. Zkontroluj přístupový token.");
+    renderVisibleMapState(visiblePoints, options);
+    renderNotesList(visibleRecords);
+    syncTimelineControls();
   } finally {
     isRefreshingMarkers = false;
   }
 }
 
-// ── Inkrementální load: stáhne jen nové záznamy, přidá na mapu ───────────────
+function resetRenderedDataset() {
+  allRecords = [];
+  allPoints = [];
+  lastTimestamp = null;
+  clearRenderedMapState();
+}
+
+async function loadFull() {
+  try {
+    const dataUrl = getSheetDataUrl();
+    if (!dataUrl) {
+      resetRenderedDataset();
+      setNotesStatus("Chybí přístupový token. Otevři mapu s #token=... v URL.");
+      syncPlaybackDataset([]);
+      return;
+    }
+
+    const response = await fetch(dataUrl, { cache: "no-store" });
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      throw new Error(data && data.error ? data.error : "Neplatná odpověď serveru.");
+    }
+
+    applyFetchedRecords(data);
+  } catch (error) {
+    console.error("Načtení mapových dat selhalo:", error);
+    resetRenderedDataset();
+    setNotesStatus("Nepodařilo se načíst poznámky. Zkontroluj přístupový token.");
+    syncPlaybackDataset([]);
+  }
+}
+
 async function loadIncremental() {
-  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((a) => !a.paused && !a.ended);
+  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((audio) => !audio.paused && !audio.ended);
   if (isAudioPlaying) return;
 
-  isRefreshingMarkers = true;
   try {
     const dataUrl = getSheetDataUrl(lastTimestamp);
     if (!dataUrl) return;
 
-    const res = await fetch(dataUrl, { cache: "no-store" });
-    const data = await res.json();
+    const response = await fetch(dataUrl, { cache: "no-store" });
+    const data = await response.json();
     if (!Array.isArray(data)) {
       throw new Error(data && data.error ? data.error : "Neplatná odpověď serveru.");
     }
 
-    // Nic nového — přeskočit veškeré překreslování
     if (data.length === 0) return;
 
-    const newValidPoints = data.filter((point) =>
-      point &&
-      point.lat !== null &&
-      point.lon !== null &&
-      point.lat !== "" &&
-      point.lon !== "" &&
-      !Number.isNaN(Number(point.lat)) &&
-      !Number.isNaN(Number(point.lon))
-    );
-
-    if (newValidPoints.length > 0) {
-      // Starý poslední marker dostane zpět výchozí (modrý) icon
-      if (markers.length > 0) {
-        const prevLast = markers[markers.length - 1];
-        prevLast.setIcon(new L.Icon.Default());
-      }
-
-      // Rozšířit polyline o nové body
-      const prevPolylineCount = allPoints.length;
-      const combinedPoints = allPoints.concat(newValidPoints);
-      const allLatlngs = combinedPoints.map((p) => [Number(p.lat), Number(p.lon)]);
-
-      if (allLatlngs.length >= 2) {
-        if (notesPolyline) {
-          notesPolyline.setLatLngs(allLatlngs);
-        } else {
-          notesPolyline = L.polyline(allLatlngs, {
-            color: "#22d3ee",
-            weight: 2,
-            opacity: 0.5,
-            dashArray: "6, 6",
-          }).addTo(map);
-        }
-        // Šipky jen pro nové segmenty (od posledního starého bodu)
-        const arrowFromIndex = Math.max(0, prevPolylineCount - 1);
-        addArrowsForSegments(allLatlngs, arrowFromIndex);
-      }
-
-      // Přidat nové markery
-      newValidPoints.forEach((point, index) => {
-        const isLast = index === newValidPoints.length - 1;
-        const marker = createMarker(point, isLast);
-        markers.push(marker);
-      });
-
-      allPoints = combinedPoints;
-    }
-
-    // Aktualizovat lastTimestamp
-    const timestamps = data.map((p) => String(p && p.time || "")).filter(Boolean);
-    if (timestamps.length > 0) {
-      const maxTs = timestamps.reduce((a, b) => (a > b ? a : b));
-      if (maxTs > (lastTimestamp || "")) lastTimestamp = maxTs;
-    }
-
-    // Panel poznámek: rebuild z kompletního stavu (allPoints + nové bez souřadnic)
-    const allData = allPoints.concat(
-      data.filter((p) => p && (p.lat === null || p.lat === "" || Number.isNaN(Number(p.lat))))
-    );
-    renderNotesList(allData.filter((p) => p != null));
+    applyFetchedRecords(mergeRecords(allRecords, data));
   } catch (error) {
     console.error("Inkrementální načtení selhalo, zkusím full load:", error);
     lastTimestamp = null;
     await loadFull();
-  } finally {
-    isRefreshingMarkers = false;
   }
 }
 
-// ── Vstupní bod ───────────────────────────────────────────────────────────────
 async function loadData() {
-  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((a) => !a.paused && !a.ended);
+  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((audio) => !audio.paused && !audio.ended);
   if (isAudioPlaying) return;
 
   if (lastTimestamp === null) {
