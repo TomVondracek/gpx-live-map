@@ -63,93 +63,6 @@
       transform: scale(0.97);
     }
 
-    #timeline-shell {
-      position: fixed;
-      left: 16px;
-      right: calc(var(--panel-w) + 16px);
-      bottom: 24px;
-      z-index: 120;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 14px 16px;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      background: rgba(15, 15, 26, 0.92);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
-    }
-
-    #timeline-topbar,
-    #timeline-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    #timeline-mode {
-      flex-shrink: 0;
-      font-size: 0.76rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--green);
-    }
-
-    #timeline-current,
-    #timeline-range {
-      min-width: 0;
-      color: var(--muted);
-      font-size: 0.82rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #timeline-current {
-      flex: 1;
-      text-align: right;
-      color: var(--text);
-      font-weight: 600;
-    }
-
-    #timeline-slider {
-      width: 100%;
-      accent-color: var(--green);
-      cursor: pointer;
-    }
-
-    #timeline-footer button {
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 8px 12px;
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
-      font: inherit;
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.1s;
-    }
-
-    #timeline-footer button:disabled,
-    #timeline-slider:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-
-    #timeline-footer button.active {
-      background: var(--green-dim);
-      border-color: rgba(42, 157, 143, 0.35);
-      color: #b6fff3;
-    }
-
-    #timeline-shell.timeline-history #timeline-mode {
-      color: #f6d98f;
-    }
-
     /* ── Panel zpráv – desktop ── */
     #notes-panel {
       width: var(--panel-w);
@@ -388,26 +301,6 @@
       #map-back {
         display: inline-flex;
         align-items: center;
-      }
-
-      #timeline-shell {
-        left: 16px;
-        right: 16px;
-        bottom: 84px;
-        padding: 12px 14px;
-        gap: 8px;
-      }
-
-      #timeline-topbar,
-      #timeline-footer {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      #timeline-current,
-      #timeline-range {
-        width: 100%;
-        text-align: left;
       }
 
       #notes-panel {

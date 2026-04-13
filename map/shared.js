@@ -18,11 +18,6 @@ let isRefreshingMarkers = false;
 let notesPolyline = null;
 let arrowMarkers = [];
 let userScrolled = false;
-let allRecords = [];
-let playbackPoints = [];
-let playbackMode = "live";
-let playbackIndex = null;
-let playbackTimer = null;
 
 // Inkrementální synchronizace
 let lastTimestamp = null;   // ISO string posledního načteného záznamu (null = full load)

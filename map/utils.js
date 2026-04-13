@@ -77,35 +77,6 @@ function formatAudioDuration(durationSec) {
   return `${minutes}:${String(seconds).padStart(2, "0")} min`;
 }
 
-function hasValidCoordinates(point) {
-  return !!(
-    point &&
-    point.lat !== null &&
-    point.lon !== null &&
-    point.lat !== "" &&
-    point.lon !== "" &&
-    !Number.isNaN(Number(point.lat)) &&
-    !Number.isNaN(Number(point.lon))
-  );
-}
-
-function getTimeValue(raw) {
-  if (!raw) return null;
-  const value = Date.parse(raw);
-  return Number.isNaN(value) ? null : value;
-}
-
-function compareRecordTimes(a, b) {
-  const aValue = getTimeValue(a);
-  const bValue = getTimeValue(b);
-
-  if (aValue != null && bValue != null) {
-    return aValue - bValue;
-  }
-
-  return String(a || "").localeCompare(String(b || ""), "cs");
-}
-
 function syncActiveNoteUI() {
   document.querySelectorAll(".note-item").forEach((el) => {
     el.classList.toggle("active", el.dataset.pointKey === activePointKey);
