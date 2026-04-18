@@ -10,11 +10,14 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 let markers = [];
 let markerByPointKey = new Map();
+let multiPinGroups = new Map();
+let expandedMultiPin = null;
 let firstFitDone = false;
 let gpxPoints = [];
 let activePointKey = null;
 let hasShownInitialLatestPopup = false;
 let isRefreshingMarkers = false;
+let suppressActivePointReset = false;
 let notesPolyline = null;
 let arrowMarkers = [];
 let userScrolled = false;
@@ -22,6 +25,7 @@ let userScrolled = false;
 // Inkrementální synchronizace
 let lastTimestamp = null;   // ISO string posledního načteného záznamu (null = full load)
 let allPoints = [];         // kumulativní seznam všech validních bodů (s lat/lon)
+let allRecords = [];        // všechny záznamy včetně těch bez GPS
 
 const WEATHER_ICONS = {
   0: "☀️",

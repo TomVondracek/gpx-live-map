@@ -43,14 +43,25 @@ function initializeGpxLayer() {
   }).addTo(map);
 }
 
-// ── Pomocná funkce: vytvoří a přidá marker na mapu ────────────────────────────
-function createMarker(point, isLast) {
-  const lat = Number(point.lat);
-  const lon = Number(point.lon);
-  const pointKey = getPointKey(point);
+function isRenderablePoint(point) {
+  return point &&
+    point.lat !== null &&
+    point.lon !== null &&
+    point.lat !== "" &&
+    point.lon !== "" &&
+    !Number.isNaN(Number(point.lat)) &&
+    !Number.isNaN(Number(point.lon));
+}
 
-  const marker = L.marker([lat, lon], isLast ? { icon: redIcon } : {}).addTo(map);
+function getLocationKey(lat, lon) {
+  return `${Number(lat).toFixed(6)},${Number(lon).toFixed(6)}`;
+}
 
+function getLocationKeyForPoint(point) {
+  return getLocationKey(point.lat, point.lon);
+}
+
+function buildPopupDetails(point, lat, lon) {
   const metaParts = [];
   if (getEntryType(point) === ENTRY_TYPE_AUDIO && point.audio_duration_sec != null) {
     metaParts.push(`🎙 ${formatAudioDuration(point.audio_duration_sec)}`);
@@ -69,21 +80,344 @@ function createMarker(point, isLast) {
     weatherLine = `${emoji}${temp}`;
   }
 
-  marker.bindPopup(buildPopupContent(point, weatherLine, metaParts));
-  marker._pointKey = pointKey;
+  return { metaParts, weatherLine };
+}
+
+function buildPointPopup(point) {
+  const lat = Number(point.lat);
+  const lon = Number(point.lon);
+  const { metaParts, weatherLine } = buildPopupDetails(point, lat, lon);
+  return buildPopupContent(point, weatherLine, metaParts);
+}
+
+function clearTrack() {
+  if (notesPolyline) {
+    map.removeLayer(notesPolyline);
+    notesPolyline = null;
+  }
+  arrowMarkers.forEach((marker) => map.removeLayer(marker));
+  arrowMarkers = [];
+}
+
+function clearRenderedMarkers(options = {}) {
+  collapseExpandedMultiPin({ keepActive: options.keepActive === true });
+  markers.forEach((marker) => map.removeLayer(marker));
+  markers = [];
+  markerByPointKey = new Map();
+  multiPinGroups = new Map();
+}
+
+function renderTrack(validPoints) {
+  clearTrack();
+
+  if (validPoints.length < 2) {
+    return;
+  }
+
+  const latlngs = validPoints.map((point) => [Number(point.lat), Number(point.lon)]);
+  notesPolyline = L.polyline(latlngs, {
+    color: "#22d3ee",
+    weight: 2,
+    opacity: 0.5,
+    dashArray: "6, 6",
+  }).addTo(map);
+  addArrowsForSegments(latlngs, 0);
+}
+
+function buildMarkerGroups(validPoints) {
+  const groups = new Map();
+
+  validPoints.forEach((point, index) => {
+    const locationKey = getLocationKeyForPoint(point);
+    if (!groups.has(locationKey)) {
+      groups.set(locationKey, []);
+    }
+
+    groups.get(locationKey).push({
+      point,
+      pointKey: getPointKey(point),
+      lat: Number(point.lat),
+      lon: Number(point.lon),
+      isLast: index === validPoints.length - 1,
+    });
+  });
+
+  return groups;
+}
+
+function renderMarkers(validPoints) {
+  clearRenderedMarkers({ keepActive: true });
+
+  const groups = buildMarkerGroups(validPoints);
+  groups.forEach((entries, locationKey) => {
+    if (entries.length === 1) {
+      markers.push(createMarker(entries[0].point, entries[0].isLast));
+      return;
+    }
+
+    markers.push(createMultiMarker(entries, locationKey));
+  });
+
+  if (!activePointKey) {
+    return;
+  }
+
+  const activeMarker = markerByPointKey.get(activePointKey);
+  if (activeMarker && typeof activeMarker.openPopup === "function") {
+    activeMarker.openPopup();
+    return;
+  }
+
+  activePointKey = null;
+  syncActiveNoteUI();
+}
+
+function createMarker(point, isLast) {
+  const lat = Number(point.lat);
+  const lon = Number(point.lon);
+  const pointKey = getPointKey(point);
+  const marker = L.marker([lat, lon], isLast ? { icon: redIcon } : {}).addTo(map);
+
+  marker.bindPopup(buildPointPopup(point));
   markerByPointKey.set(pointKey, marker);
+
+  marker.on("click", () => {
+    collapseExpandedMultiPin({ keepActive: true });
+    activePointKey = pointKey;
+    syncActiveNoteUI();
+  });
+
   marker.on("popupopen", () => {
     activePointKey = pointKey;
     syncActiveNoteUI();
   });
+
   marker.on("popupclose", () => {
-    if (!isRefreshingMarkers && activePointKey === pointKey) {
+    if (!isRefreshingMarkers && !suppressActivePointReset && activePointKey === pointKey) {
       activePointKey = null;
       syncActiveNoteUI();
     }
   });
 
   return marker;
+}
+
+function createMultiMarker(entries, locationKey) {
+  const lat = entries[0].lat;
+  const lon = entries[0].lon;
+  const containsLast = entries.some((entry) => entry.isLast);
+  const marker = L.marker([lat, lon], {
+    icon: L.divIcon({
+      className: "multi-pin-wrapper",
+      html: `<div class="multi-pin-marker${containsLast ? " is-last" : ""}" aria-label="${entries.length} poznámek na jednom místě"><span>${entries.length}</span></div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+    }),
+    zIndexOffset: containsLast ? 450 : 250,
+  }).addTo(map);
+
+  const group = {
+    locationKey,
+    entries,
+    marker,
+    orbitMarkers: [],
+    orbitLinks: [],
+    orbitMarkerByPointKey: new Map(),
+    isExpanded: false,
+  };
+
+  multiPinGroups.set(locationKey, group);
+
+  marker.on("click", () => {
+    if (expandedMultiPin && expandedMultiPin.locationKey === locationKey) {
+      collapseExpandedMultiPin();
+      return;
+    }
+
+    const preferredPointKey = activePointKey && entries.some((entry) => entry.pointKey === activePointKey)
+      ? activePointKey
+      : entries[entries.length - 1].pointKey;
+
+    activePointKey = preferredPointKey;
+    syncActiveNoteUI();
+    expandMultiPin(locationKey, preferredPointKey);
+  });
+
+  entries.forEach((entry) => {
+    markerByPointKey.set(entry.pointKey, {
+      openPopup() {
+        activePointKey = entry.pointKey;
+        syncActiveNoteUI();
+        expandMultiPin(locationKey, entry.pointKey);
+      }
+    });
+  });
+
+  return marker;
+}
+
+function getOrbitRadius(count) {
+  return Math.max(54, Math.min(112, 34 + count * 14));
+}
+
+function getOrbitLatLng(centerLatLng, angle, radiusPx) {
+  const zoom = map.getZoom();
+  const centerPoint = map.project(centerLatLng, zoom);
+  const orbitPoint = L.point(
+    centerPoint.x + Math.cos(angle) * radiusPx,
+    centerPoint.y + Math.sin(angle) * radiusPx,
+  );
+  return map.unproject(orbitPoint, zoom);
+}
+
+function getOrbitEntries(entries, focusPointKey) {
+  const ordered = [...entries].reverse();
+  if (!focusPointKey) {
+    return ordered;
+  }
+
+  const focusIndex = ordered.findIndex((entry) => entry.pointKey === focusPointKey);
+  if (focusIndex <= 0) {
+    return ordered;
+  }
+
+  const [focusEntry] = ordered.splice(focusIndex, 1);
+  ordered.unshift(focusEntry);
+  return ordered;
+}
+
+function expandMultiPin(locationKey, focusPointKey = null) {
+  const group = multiPinGroups.get(locationKey);
+  if (!group) {
+    return;
+  }
+
+  if (expandedMultiPin && expandedMultiPin.locationKey !== locationKey) {
+    collapseExpandedMultiPin({ keepActive: true });
+  }
+
+  if (group.isExpanded) {
+    const focusMarker = focusPointKey ? group.orbitMarkerByPointKey.get(focusPointKey) : null;
+    if (focusMarker) {
+      focusMarker.openPopup();
+      activePointKey = focusPointKey;
+      syncActiveNoteUI();
+    }
+    return;
+  }
+
+  const displayEntries = getOrbitEntries(group.entries, focusPointKey);
+  const effectiveFocusPointKey = focusPointKey || (displayEntries[0] && displayEntries[0].pointKey) || null;
+  const centerLatLng = group.marker.getLatLng();
+  const radiusPx = getOrbitRadius(displayEntries.length);
+
+  if (group.marker.getElement()) {
+    group.marker.getElement().classList.add("is-expanded");
+  }
+
+  displayEntries.forEach((entry, index) => {
+    const angle = -Math.PI / 2 + ((Math.PI * 2) / displayEntries.length) * index;
+    const orbitLatLng = getOrbitLatLng(centerLatLng, angle, radiusPx);
+    const orbitMarker = L.marker(orbitLatLng, {
+      icon: L.divIcon({
+        className: "orbit-pin-wrapper",
+        html: `<div class="orbit-pin-marker${entry.isLast ? " is-last" : ""}"><span>${index + 1}</span></div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      }),
+      zIndexOffset: entry.pointKey === effectiveFocusPointKey ? 700 : 550,
+    }).addTo(map);
+
+    const link = L.polyline([centerLatLng, orbitLatLng], {
+      color: "#67e8f9",
+      weight: 2,
+      opacity: 0.55,
+      dashArray: "4, 4",
+      interactive: false,
+    }).addTo(map);
+
+    orbitMarker.bindPopup(buildPointPopup(entry.point), {
+      autoClose: false,
+      closeOnClick: false,
+      closeButton: false,
+      autoPan: false,
+      offset: [0, -12],
+      className: "multi-pin-popup",
+    });
+
+    orbitMarker.on("click", () => {
+      activePointKey = entry.pointKey;
+      syncActiveNoteUI();
+    });
+
+    orbitMarker.on("popupclose", () => {
+      if (!isRefreshingMarkers && !suppressActivePointReset && expandedMultiPin !== group && activePointKey === entry.pointKey) {
+        activePointKey = null;
+        syncActiveNoteUI();
+      }
+    });
+
+    group.orbitMarkers.push(orbitMarker);
+    group.orbitLinks.push(link);
+    group.orbitMarkerByPointKey.set(entry.pointKey, orbitMarker);
+  });
+
+  const focusMarker = effectiveFocusPointKey
+    ? group.orbitMarkerByPointKey.get(effectiveFocusPointKey)
+    : group.orbitMarkers[0];
+
+  group.orbitMarkers.forEach((orbitMarker) => {
+    if (orbitMarker !== focusMarker) {
+      orbitMarker.openPopup();
+    }
+  });
+  if (focusMarker) {
+    focusMarker.openPopup();
+  }
+
+  group.isExpanded = true;
+  expandedMultiPin = group;
+  activePointKey = effectiveFocusPointKey;
+  syncActiveNoteUI();
+}
+
+function collapseExpandedMultiPin(options = {}) {
+  if (!expandedMultiPin) {
+    return;
+  }
+
+  const keepActive = options.keepActive === true;
+  const group = expandedMultiPin;
+  suppressActivePointReset = keepActive;
+
+  group.orbitMarkers.forEach((marker) => {
+    marker.closePopup();
+    if (map.hasLayer(marker)) {
+      map.removeLayer(marker);
+    }
+  });
+  group.orbitLinks.forEach((link) => {
+    if (map.hasLayer(link)) {
+      map.removeLayer(link);
+    }
+  });
+
+  group.orbitMarkers = [];
+  group.orbitLinks = [];
+  group.orbitMarkerByPointKey = new Map();
+  group.isExpanded = false;
+
+  if (group.marker.getElement()) {
+    group.marker.getElement().classList.remove("is-expanded");
+  }
+
+  expandedMultiPin = null;
+  suppressActivePointReset = false;
+
+  if (!keepActive && activePointKey && group.entries.some((entry) => entry.pointKey === activePointKey)) {
+    activePointKey = null;
+    syncActiveNoteUI();
+  }
 }
 
 // ── Pomocná funkce: přidá šipky směru pro nové segmenty polyline ──────────────
@@ -112,6 +446,27 @@ function addArrowsForSegments(latlngs, fromIndex) {
   }
 }
 
+function setLatestActivePoint(validPoints) {
+  if (hasShownInitialLatestPopup || validPoints.length === 0) {
+    return;
+  }
+
+  activePointKey = getPointKey(validPoints[validPoints.length - 1]);
+  hasShownInitialLatestPopup = true;
+}
+
+function updateTimestamp(data) {
+  const timestamps = data.map((point) => String(point && point.time || "")).filter(Boolean);
+  if (timestamps.length === 0) {
+    return;
+  }
+
+  const maxTimestamp = timestamps.reduce((left, right) => (left > right ? left : right));
+  if (maxTimestamp > (lastTimestamp || "")) {
+    lastTimestamp = maxTimestamp;
+  }
+}
+
 // ── Full load: stáhne celý dataset, resetuje mapu ─────────────────────────────
 async function loadFull() {
   isRefreshingMarkers = true;
@@ -128,72 +483,29 @@ async function loadFull() {
       throw new Error(data && data.error ? data.error : "Neplatná odpověď serveru.");
     }
 
-    // Reset mapy
-    markers.forEach((m) => map.removeLayer(m));
-    markers = [];
-    markerByPointKey = new Map();
-    if (notesPolyline) { map.removeLayer(notesPolyline); notesPolyline = null; }
-    arrowMarkers.forEach((m) => map.removeLayer(m));
-    arrowMarkers = [];
-    allPoints = [];
-    lastTimestamp = null;
+    const validPoints = data.filter(isRenderablePoint);
 
-    const validPoints = data.filter((point) =>
-      point &&
-      point.lat !== null &&
-      point.lon !== null &&
-      point.lat !== "" &&
-      point.lon !== "" &&
-      !Number.isNaN(Number(point.lat)) &&
-      !Number.isNaN(Number(point.lon))
-    );
+    clearRenderedMarkers({ keepActive: true });
+    clearTrack();
 
-    // Polyline + šipky
-    if (validPoints.length >= 2) {
-      const latlngs = validPoints.map((p) => [Number(p.lat), Number(p.lon)]);
-      notesPolyline = L.polyline(latlngs, {
-        color: "#22d3ee",
-        weight: 2,
-        opacity: 0.5,
-        dashArray: "6, 6",
-      }).addTo(map);
-      addArrowsForSegments(latlngs, 0);
-    }
-
-    // Markery
-    validPoints.forEach((point, index) => {
-      const isLast = index === validPoints.length - 1;
-      const marker = createMarker(point, isLast);
-      markers.push(marker);
-    });
-
-    // Uložit stav pro inkrementální sync
     allPoints = validPoints;
-    const timestamps = data.map((p) => String(p && p.time || "")).filter(Boolean).sort();
-    if (timestamps.length > 0) {
-      lastTimestamp = timestamps[timestamps.length - 1];
-    }
+    allRecords = data.filter((point) => point != null);
+    lastTimestamp = null;
+    updateTimestamp(data);
+    setLatestActivePoint(validPoints);
 
-    // Fit bounds
+    renderTrack(validPoints);
+    renderMarkers(validPoints);
+
     if (validPoints.length > 0 && !firstFitDone) {
-      const bounds = L.latLngBounds(validPoints.map((p) => [Number(p.lat), Number(p.lon)]));
+      const bounds = L.latLngBounds(validPoints.map((point) => [Number(point.lat), Number(point.lon)]));
       if (bounds.isValid()) {
         map.fitBounds(bounds.pad(0.2));
         firstFitDone = true;
       }
     }
 
-    if (!hasShownInitialLatestPopup && validPoints.length > 0) {
-      activePointKey = getPointKey(validPoints[validPoints.length - 1]);
-      hasShownInitialLatestPopup = true;
-    }
-
-    if (activePointKey) {
-      const activeMarker = markerByPointKey.get(activePointKey);
-      if (activeMarker) activeMarker.openPopup();
-    }
-
-    renderNotesList(data.filter((p) => p != null));
+    renderNotesList(allRecords);
   } catch (error) {
     console.error("Načtení mapových dat selhalo:", error);
     setNotesStatus("Nepodařilo se načíst poznámky. Zkontroluj přístupový token.");
@@ -204,7 +516,7 @@ async function loadFull() {
 
 // ── Inkrementální load: stáhne jen nové záznamy, přidá na mapu ───────────────
 async function loadIncremental() {
-  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((a) => !a.paused && !a.ended);
+  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((audio) => !audio.paused && !audio.ended);
   if (isAudioPlaying) return;
 
   isRefreshingMarkers = true;
@@ -218,69 +530,20 @@ async function loadIncremental() {
       throw new Error(data && data.error ? data.error : "Neplatná odpověď serveru.");
     }
 
-    // Nic nového — přeskočit veškeré překreslování
-    if (data.length === 0) return;
+    if (data.length === 0) {
+      return;
+    }
 
-    const newValidPoints = data.filter((point) =>
-      point &&
-      point.lat !== null &&
-      point.lon !== null &&
-      point.lat !== "" &&
-      point.lon !== "" &&
-      !Number.isNaN(Number(point.lat)) &&
-      !Number.isNaN(Number(point.lon))
-    );
-
+    const newValidPoints = data.filter(isRenderablePoint);
     if (newValidPoints.length > 0) {
-      // Starý poslední marker dostane zpět výchozí (modrý) icon
-      if (markers.length > 0) {
-        const prevLast = markers[markers.length - 1];
-        prevLast.setIcon(new L.Icon.Default());
-      }
-
-      // Rozšířit polyline o nové body
-      const prevPolylineCount = allPoints.length;
-      const combinedPoints = allPoints.concat(newValidPoints);
-      const allLatlngs = combinedPoints.map((p) => [Number(p.lat), Number(p.lon)]);
-
-      if (allLatlngs.length >= 2) {
-        if (notesPolyline) {
-          notesPolyline.setLatLngs(allLatlngs);
-        } else {
-          notesPolyline = L.polyline(allLatlngs, {
-            color: "#22d3ee",
-            weight: 2,
-            opacity: 0.5,
-            dashArray: "6, 6",
-          }).addTo(map);
-        }
-        // Šipky jen pro nové segmenty (od posledního starého bodu)
-        const arrowFromIndex = Math.max(0, prevPolylineCount - 1);
-        addArrowsForSegments(allLatlngs, arrowFromIndex);
-      }
-
-      // Přidat nové markery
-      newValidPoints.forEach((point, index) => {
-        const isLast = index === newValidPoints.length - 1;
-        const marker = createMarker(point, isLast);
-        markers.push(marker);
-      });
-
-      allPoints = combinedPoints;
+      allPoints = allPoints.concat(newValidPoints);
+      renderTrack(allPoints);
+      renderMarkers(allPoints);
     }
 
-    // Aktualizovat lastTimestamp
-    const timestamps = data.map((p) => String(p && p.time || "")).filter(Boolean);
-    if (timestamps.length > 0) {
-      const maxTs = timestamps.reduce((a, b) => (a > b ? a : b));
-      if (maxTs > (lastTimestamp || "")) lastTimestamp = maxTs;
-    }
-
-    // Panel poznámek: rebuild z kompletního stavu (allPoints + nové bez souřadnic)
-    const allData = allPoints.concat(
-      data.filter((p) => p && (p.lat === null || p.lat === "" || Number.isNaN(Number(p.lat))))
-    );
-    renderNotesList(allData.filter((p) => p != null));
+    allRecords = allRecords.concat(data.filter((point) => point != null));
+    updateTimestamp(data);
+    renderNotesList(allRecords);
   } catch (error) {
     console.error("Inkrementální načtení selhalo, zkusím full load:", error);
     lastTimestamp = null;
@@ -292,7 +555,7 @@ async function loadIncremental() {
 
 // ── Vstupní bod ───────────────────────────────────────────────────────────────
 async function loadData() {
-  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((a) => !a.paused && !a.ended);
+  const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((audio) => !audio.paused && !audio.ended);
   if (isAudioPlaying) return;
 
   if (lastTimestamp === null) {
@@ -301,6 +564,18 @@ async function loadData() {
     await loadIncremental();
   }
 }
+
+map.on("click", () => {
+  collapseExpandedMultiPin();
+});
+
+map.on("zoomstart", () => {
+  collapseExpandedMultiPin({ keepActive: true });
+});
+
+map.on("dragstart", () => {
+  collapseExpandedMultiPin({ keepActive: true });
+});
 
 initializeGpxLayer();
 loadData();

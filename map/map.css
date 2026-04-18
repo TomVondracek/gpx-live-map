@@ -63,6 +63,68 @@
       transform: scale(0.97);
     }
 
+    .multi-pin-marker {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 30% 30%, #67e8f9, #0284c7);
+      color: #f8fafc;
+      font-size: 0.85rem;
+      font-weight: 800;
+      border: 2px solid rgba(255, 255, 255, 0.88);
+      box-shadow: 0 10px 24px rgba(2, 132, 199, 0.35);
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .multi-pin-wrapper:hover .multi-pin-marker,
+    .multi-pin-wrapper.is-expanded .multi-pin-marker {
+      transform: scale(1.08);
+      box-shadow: 0 14px 28px rgba(34, 211, 238, 0.35);
+    }
+
+    .multi-pin-marker.is-last {
+      background: radial-gradient(circle at 30% 30%, #fb7185, #e11d48);
+      box-shadow: 0 10px 24px rgba(225, 29, 72, 0.32);
+    }
+
+    .orbit-pin-marker {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(15, 23, 42, 0.96);
+      color: #e2e8f0;
+      border: 2px solid rgba(103, 232, 249, 0.9);
+      font-size: 0.72rem;
+      font-weight: 700;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.35);
+      cursor: pointer;
+    }
+
+    .orbit-pin-marker.is-last {
+      border-color: rgba(251, 113, 133, 0.95);
+      color: #fff1f2;
+    }
+
+    .leaflet-popup.multi-pin-popup .leaflet-popup-content-wrapper {
+      background: rgba(15, 15, 26, 0.96);
+      color: var(--text);
+      border: 1px solid rgba(103, 232, 249, 0.18);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.38);
+    }
+
+    .leaflet-popup.multi-pin-popup .leaflet-popup-tip {
+      background: rgba(15, 15, 26, 0.96);
+    }
+
+    .leaflet-popup.multi-pin-popup .leaflet-popup-content {
+      margin: 10px 12px;
+    }
+
     /* ── Panel zpráv – desktop ── */
     #notes-panel {
       width: var(--panel-w);
