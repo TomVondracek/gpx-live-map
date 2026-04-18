@@ -53,13 +53,7 @@ function isRenderablePoint(point) {
     !Number.isNaN(Number(point.lon));
 }
 
-function getLocationKey(lat, lon) {
-  return `${Number(lat).toFixed(6)},${Number(lon).toFixed(6)}`;
-}
-
-function getLocationKeyForPoint(point) {
-  return getLocationKey(point.lat, point.lon);
-}
+const MULTI_PIN_TOLERANCE_METERS = 15;
 
 function buildPopupDetails(point, lat, lon) {
   const metaParts = [];
@@ -125,21 +119,45 @@ function renderTrack(validPoints) {
 }
 
 function buildMarkerGroups(validPoints) {
-  const groups = new Map();
+  const groups = [];
 
   validPoints.forEach((point, index) => {
-    const locationKey = getLocationKeyForPoint(point);
-    if (!groups.has(locationKey)) {
-      groups.set(locationKey, []);
+    const lat = Number(point.lat);
+    const lon = Number(point.lon);
+    let targetGroup = null;
+
+    for (const group of groups) {
+      const distanceToCenter = getDistanceFromLatLonInMeters(lat, lon, group.centerLat, group.centerLon);
+      if (distanceToCenter <= MULTI_PIN_TOLERANCE_METERS) {
+        targetGroup = group;
+        break;
+      }
     }
 
-    groups.get(locationKey).push({
+    if (!targetGroup) {
+      targetGroup = {
+        locationKey: `cluster-${groups.length}`,
+        centerLat: lat,
+        centerLon: lon,
+        sumLat: 0,
+        sumLon: 0,
+        entries: [],
+      };
+      groups.push(targetGroup);
+    }
+
+    targetGroup.entries.push({
       point,
       pointKey: getPointKey(point),
-      lat: Number(point.lat),
-      lon: Number(point.lon),
+      lat,
+      lon,
       isLast: index === validPoints.length - 1,
     });
+
+    targetGroup.sumLat += lat;
+    targetGroup.sumLon += lon;
+    targetGroup.centerLat = targetGroup.sumLat / targetGroup.entries.length;
+    targetGroup.centerLon = targetGroup.sumLon / targetGroup.entries.length;
   });
 
   return groups;
@@ -149,13 +167,14 @@ function renderMarkers(validPoints) {
   clearRenderedMarkers({ keepActive: true });
 
   const groups = buildMarkerGroups(validPoints);
-  groups.forEach((entries, locationKey) => {
+  groups.forEach((group) => {
+    const entries = group.entries;
     if (entries.length === 1) {
       markers.push(createMarker(entries[0].point, entries[0].isLast));
       return;
     }
 
-    markers.push(createMultiMarker(entries, locationKey));
+    markers.push(createMultiMarker(entries, group.locationKey));
   });
 
   if (!activePointKey) {
