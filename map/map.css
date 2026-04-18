@@ -91,23 +91,91 @@
     }
 
     .orbit-pin-marker {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      background: rgba(15, 23, 42, 0.96);
-      color: #e2e8f0;
-      border: 2px solid rgba(103, 232, 249, 0.9);
-      font-size: 0.72rem;
-      font-weight: 700;
-      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.35);
+      position: relative;
+      width: 34px;
+      height: 34px;
       cursor: pointer;
+      filter: drop-shadow(0 10px 14px rgba(15, 23, 42, 0.2));
+      transition: transform 0.16s ease, filter 0.16s ease;
     }
 
-    .orbit-pin-marker.is-last {
-      border-color: rgba(251, 113, 133, 0.95);
-      color: #fff1f2;
+    .orbit-pin-marker::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 3px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      background:
+        radial-gradient(circle at 35% 30%, rgba(255,255,255,0.96) 0 24%, rgba(255,255,255,0) 25%),
+        linear-gradient(180deg, #eff6ff 0%, #bfdbfe 100%);
+      border: 2px solid rgba(2, 132, 199, 0.92);
+      box-shadow:
+        0 0 0 4px rgba(255, 255, 255, 0.78),
+        0 8px 18px rgba(2, 132, 199, 0.22);
+    }
+
+    .orbit-pin-marker::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: 3px;
+      width: 12px;
+      height: 12px;
+      background: linear-gradient(180deg, #bfdbfe 0%, #60a5fa 100%);
+      border-right: 2px solid rgba(2, 132, 199, 0.92);
+      border-bottom: 2px solid rgba(2, 132, 199, 0.92);
+      transform: translateX(-50%) rotate(45deg);
+      border-bottom-right-radius: 3px;
+    }
+
+    .orbit-pin-number {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      top: -1px;
+      font-size: 0.76rem;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+      z-index: 1;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+
+    .orbit-pin-wrapper:hover .orbit-pin-marker,
+    .orbit-pin-wrapper.is-selected .orbit-pin-marker {
+      transform: translateY(-2px) scale(1.08);
+      filter: drop-shadow(0 14px 16px rgba(2, 132, 199, 0.28));
+    }
+
+    .orbit-pin-wrapper.is-selected .orbit-pin-marker::before {
+      box-shadow:
+        0 0 0 4px rgba(255, 255, 255, 0.9),
+        0 0 0 8px rgba(103, 232, 249, 0.25),
+        0 10px 22px rgba(2, 132, 199, 0.3);
+    }
+
+    .orbit-pin-marker.is-last::before {
+      background:
+        radial-gradient(circle at 35% 30%, rgba(255,255,255,0.96) 0 24%, rgba(255,255,255,0) 25%),
+        linear-gradient(180deg, #ffe4e6 0%, #fda4af 100%);
+      border-color: rgba(225, 29, 72, 0.92);
+      box-shadow:
+        0 0 0 4px rgba(255, 255, 255, 0.78),
+        0 8px 18px rgba(225, 29, 72, 0.24);
+    }
+
+    .orbit-pin-marker.is-last::after {
+      background: linear-gradient(180deg, #fda4af 0%, #fb7185 100%);
+      border-right-color: rgba(225, 29, 72, 0.92);
+      border-bottom-color: rgba(225, 29, 72, 0.92);
+    }
+
+    .orbit-pin-marker.is-last .orbit-pin-number {
+      color: #4c0519;
     }
 
     .leaflet-popup.multi-pin-popup .leaflet-popup-content-wrapper {

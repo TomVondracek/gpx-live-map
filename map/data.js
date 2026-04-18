@@ -242,6 +242,7 @@ function createMultiMarker(entries, locationKey) {
     orbitMarkers: [],
     orbitLinks: [],
     orbitMarkerByPointKey: new Map(),
+    activeOrbitPointKey: null,
     isExpanded: false,
   };
 
@@ -253,13 +254,7 @@ function createMultiMarker(entries, locationKey) {
       return;
     }
 
-    const preferredPointKey = activePointKey && entries.some((entry) => entry.pointKey === activePointKey)
-      ? activePointKey
-      : entries[entries.length - 1].pointKey;
-
-    activePointKey = preferredPointKey;
-    syncActiveNoteUI();
-    expandMultiPin(locationKey, preferredPointKey);
+    expandMultiPin(locationKey, { openPopup: false });
   });
 
   entries.forEach((entry) => {
@@ -267,12 +262,23 @@ function createMultiMarker(entries, locationKey) {
       openPopup() {
         activePointKey = entry.pointKey;
         syncActiveNoteUI();
-        expandMultiPin(locationKey, entry.pointKey);
+        expandMultiPin(locationKey, { focusPointKey: entry.pointKey, openPopup: true });
       }
     });
   });
 
   return marker;
+}
+
+function setMultiPinActiveOrbit(group, pointKey = null) {
+  group.activeOrbitPointKey = pointKey;
+  group.orbitMarkers.forEach((marker) => {
+    const markerElement = marker.getElement();
+    if (!markerElement) {
+      return;
+    }
+    markerElement.classList.toggle("is-selected", marker._pointKey === pointKey);
+  });
 }
 
 function getOrbitRadius(count) {
@@ -305,11 +311,14 @@ function getOrbitEntries(entries, focusPointKey) {
   return ordered;
 }
 
-function expandMultiPin(locationKey, focusPointKey = null) {
+function expandMultiPin(locationKey, options = {}) {
   const group = multiPinGroups.get(locationKey);
   if (!group) {
     return;
   }
+
+  const focusPointKey = options.focusPointKey || null;
+  const openPopup = options.openPopup === true;
 
   if (expandedMultiPin && expandedMultiPin.locationKey !== locationKey) {
     collapseExpandedMultiPin({ keepActive: true });
@@ -317,10 +326,15 @@ function expandMultiPin(locationKey, focusPointKey = null) {
 
   if (group.isExpanded) {
     const focusMarker = focusPointKey ? group.orbitMarkerByPointKey.get(focusPointKey) : null;
-    if (focusMarker) {
+    if (openPopup && focusMarker) {
       focusMarker.openPopup();
       activePointKey = focusPointKey;
       syncActiveNoteUI();
+      setMultiPinActiveOrbit(group, focusPointKey);
+    } else if (!openPopup) {
+      activePointKey = null;
+      syncActiveNoteUI();
+      setMultiPinActiveOrbit(group, null);
     }
     return;
   }
@@ -340,12 +354,13 @@ function expandMultiPin(locationKey, focusPointKey = null) {
     const orbitMarker = L.marker(orbitLatLng, {
       icon: L.divIcon({
         className: "orbit-pin-wrapper",
-        html: `<div class="orbit-pin-marker${entry.isLast ? " is-last" : ""}"><span>${index + 1}</span></div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
+        html: `<div class="orbit-pin-marker${entry.isLast ? " is-last" : ""}" aria-label="Poznámka ${index + 1}"><span class="orbit-pin-number">${index + 1}</span></div>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
       }),
       zIndexOffset: entry.pointKey === effectiveFocusPointKey ? 700 : 550,
     }).addTo(map);
+    orbitMarker._pointKey = entry.pointKey;
 
     const link = L.polyline([centerLatLng, orbitLatLng], {
       color: "#67e8f9",
@@ -356,7 +371,7 @@ function expandMultiPin(locationKey, focusPointKey = null) {
     }).addTo(map);
 
     orbitMarker.bindPopup(buildPointPopup(entry.point), {
-      autoClose: false,
+      autoClose: true,
       closeOnClick: false,
       closeButton: false,
       autoPan: false,
@@ -367,9 +382,19 @@ function expandMultiPin(locationKey, focusPointKey = null) {
     orbitMarker.on("click", () => {
       activePointKey = entry.pointKey;
       syncActiveNoteUI();
+      setMultiPinActiveOrbit(group, entry.pointKey);
+    });
+
+    orbitMarker.on("popupopen", () => {
+      activePointKey = entry.pointKey;
+      syncActiveNoteUI();
+      setMultiPinActiveOrbit(group, entry.pointKey);
     });
 
     orbitMarker.on("popupclose", () => {
+      if (group.activeOrbitPointKey === entry.pointKey) {
+        setMultiPinActiveOrbit(group, null);
+      }
       if (!isRefreshingMarkers && !suppressActivePointReset && expandedMultiPin !== group && activePointKey === entry.pointKey) {
         activePointKey = null;
         syncActiveNoteUI();
@@ -381,23 +406,21 @@ function expandMultiPin(locationKey, focusPointKey = null) {
     group.orbitMarkerByPointKey.set(entry.pointKey, orbitMarker);
   });
 
-  const focusMarker = effectiveFocusPointKey
-    ? group.orbitMarkerByPointKey.get(effectiveFocusPointKey)
-    : group.orbitMarkers[0];
-
-  group.orbitMarkers.forEach((orbitMarker) => {
-    if (orbitMarker !== focusMarker) {
-      orbitMarker.openPopup();
-    }
-  });
-  if (focusMarker) {
-    focusMarker.openPopup();
-  }
-
   group.isExpanded = true;
   expandedMultiPin = group;
-  activePointKey = effectiveFocusPointKey;
+  activePointKey = openPopup ? effectiveFocusPointKey : null;
   syncActiveNoteUI();
+  setMultiPinActiveOrbit(group, openPopup ? effectiveFocusPointKey : null);
+
+  if (openPopup) {
+    const focusMarker = effectiveFocusPointKey
+      ? group.orbitMarkerByPointKey.get(effectiveFocusPointKey)
+      : group.orbitMarkers[0];
+
+    if (focusMarker) {
+      focusMarker.openPopup();
+    }
+  }
 }
 
 function collapseExpandedMultiPin(options = {}) {
@@ -424,6 +447,7 @@ function collapseExpandedMultiPin(options = {}) {
   group.orbitMarkers = [];
   group.orbitLinks = [];
   group.orbitMarkerByPointKey = new Map();
+  group.activeOrbitPointKey = null;
   group.isExpanded = false;
 
   if (group.marker.getElement()) {
