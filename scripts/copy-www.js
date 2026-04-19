@@ -88,6 +88,13 @@ if (fs.existsSync(swJs)) {
   console.log("  sw.js -> www/sw.js");
 }
 
+// runner.js → www/runner.js (Background Runner script pro auto-tracking na pozadí)
+const runnerJs = path.join(ROOT, "runner.js");
+if (fs.existsSync(runnerJs)) {
+  fs.copyFileSync(runnerJs, path.join(WWW, "runner.js"));
+  console.log("  runner.js -> www/runner.js");
+}
+
 // runtime-config.js → www/runtime-config.js (lokální runtime konfigurace, pokud existuje)
 const runtimeConfig = path.join(ROOT, "runtime-config.js");
 const runtimeConfigTarget = path.join(WWW, "runtime-config.js");

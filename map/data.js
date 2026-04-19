@@ -53,6 +53,36 @@ function isRenderablePoint(point) {
     !Number.isNaN(Number(point.lon));
 }
 
+// ── Track body deduplication (zobraz pouze nejnovější v okruhu 50m) ────────────
+const TRACK_DEDUP_METERS = 50;
+
+/**
+ * Z pole track bodů vrátí pouze ty, které jsou nejnovější ve svém okolí.
+ * Pokud existují dva track body do TRACK_DEDUP_METERS od sebe, zobrazí se jen novější.
+ * Ostatní typy záznamů (text, audio, photo) tato funkce neovlivňuje.
+ */
+function deduplicateTrackPoints(trackPoints) {
+  // Seřadit sestupně dle času — nejnovější první
+  const sorted = [...trackPoints].sort((a, b) => {
+    const ta = String(a.time || "");
+    const tb = String(b.time || "");
+    return tb > ta ? 1 : tb < ta ? -1 : 0;
+  });
+
+  const kept = [];
+  for (const point of sorted) {
+    const lat = Number(point.lat);
+    const lon = Number(point.lon);
+    const tooClose = kept.some((other) => {
+      return getDistanceFromLatLonInMeters(lat, lon, Number(other.lat), Number(other.lon)) <= TRACK_DEDUP_METERS;
+    });
+    if (!tooClose) {
+      kept.push(point);
+    }
+  }
+  return kept;
+}
+
 const MULTI_PIN_TOLERANCE_METERS = 15;
 
 function buildPopupDetails(point, lat, lon) {
@@ -166,7 +196,18 @@ function buildMarkerGroups(validPoints) {
 function renderMarkers(validPoints) {
   clearRenderedMarkers({ keepActive: true });
 
-  const groups = buildMarkerGroups(validPoints);
+  // Rozdělit body na track body a ostatní (text/audio/photo)
+  const trackPoints = validPoints.filter((p) => getEntryType(p) === ENTRY_TYPE_TRACK);
+  const notePoints = validPoints.filter((p) => getEntryType(p) !== ENTRY_TYPE_TRACK);
+
+  // Track body: deduplikovat (50m zona) a vykreslit jako malé modré kruhy
+  const dedupedTrackPoints = deduplicateTrackPoints(trackPoints);
+  dedupedTrackPoints.forEach((point) => {
+    markers.push(createTrackMarker(point));
+  });
+
+  // Ostatní záznamy: standardní multi-pin logika beze změny
+  const groups = buildMarkerGroups(notePoints);
   groups.forEach((group) => {
     const entries = group.entries;
     if (entries.length === 1) {
@@ -221,7 +262,81 @@ function createMarker(point, isLast) {
   return marker;
 }
 
-function createMultiMarker(entries, locationKey) {
+// ── Track marker (auto-tracking body) ────────────────────────────────────────
+
+function buildTrackPopup(point) {
+  const wrapper = document.createElement("div");
+
+  // Čas
+  const timeEl = document.createElement("div");
+  timeEl.className = "track-popup-time";
+  timeEl.textContent = formatTime(point.time);
+  wrapper.appendChild(timeEl);
+
+  // Data řádek: baterie, rychlost, nadmořská výška
+  const row1 = document.createElement("div");
+  row1.className = "track-popup-row";
+  const parts1 = [];
+  if (point.battery != null) parts1.push(`🔋 ${point.battery}%`);
+  if (point.speed != null)   parts1.push(`${point.speed} km/h`);
+  if (point.altitude != null) parts1.push(`▲ ${point.altitude} m`);
+  row1.textContent = parts1.join("  ");
+  wrapper.appendChild(row1);
+
+  // Data řádek: teplota, GPS přesnost
+  const row2Parts = [];
+  if (point.weather_temp != null) {
+    const emoji = getWeatherEmoji(point.weather_code);
+    row2Parts.push(`${emoji} ${Math.round(point.weather_temp)}°C`);
+  }
+  if (point.gps_accuracy != null) row2Parts.push(`±${point.gps_accuracy} m`);
+
+  if (row2Parts.length > 0) {
+    const row2 = document.createElement("div");
+    row2.className = "track-popup-row";
+    row2.textContent = row2Parts.join("  ");
+    wrapper.appendChild(row2);
+  }
+
+  return wrapper;
+}
+
+function createTrackMarker(point) {
+  const lat = Number(point.lat);
+  const lon = Number(point.lon);
+  const pointKey = getPointKey(point);
+  const marker = L.marker([lat, lon], {
+    icon: trackIcon,
+    zIndexOffset: 100,
+  }).addTo(map);
+
+  marker.bindPopup(buildTrackPopup(point), {
+    className: "track-popup",
+    maxWidth: 200,
+  });
+
+  markerByPointKey.set(pointKey, marker);
+
+  marker.on("click", () => {
+    collapseExpandedMultiPin({ keepActive: true });
+    activePointKey = pointKey;
+    syncActiveNoteUI();
+  });
+
+  marker.on("popupopen", () => {
+    activePointKey = pointKey;
+    syncActiveNoteUI();
+  });
+
+  marker.on("popupclose", () => {
+    if (!isRefreshingMarkers && !suppressActivePointReset && activePointKey === pointKey) {
+      activePointKey = null;
+      syncActiveNoteUI();
+    }
+  });
+
+  return marker;
+}
   const lat = entries[0].lat;
   const lon = entries[0].lon;
   const containsLast = entries.some((entry) => entry.isLast);

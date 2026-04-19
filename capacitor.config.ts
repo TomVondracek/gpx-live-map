@@ -17,6 +17,14 @@ const config: CapacitorConfig = {
       backgroundColor: "#1a1a2e",
       style: "DARK",
     },
+    BackgroundRunner: {
+      label: "cz.behpoznamky.app.background",
+      src: "runner.js",
+      event: "trackPoint",
+      repeat: false,   // interval řídíme sami přes dispatchEvent
+      interval: 0,
+      autoStart: false,
+    },
   },
 };
 

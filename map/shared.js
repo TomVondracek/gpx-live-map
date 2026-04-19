@@ -50,6 +50,15 @@ const redIcon = L.icon({
   shadowSize: [41, 41]
 });
 
+// Ikona pro auto-tracking body — malý modrý kruh
+const trackIcon = L.divIcon({
+  className: "",
+  html: '<div class="track-dot"></div>',
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
+  popupAnchor: [0, -8],
+});
+
 const audioBlobUrlCache = new Map();
 const audioFetchPromises = new Map();
 

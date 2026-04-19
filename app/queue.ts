@@ -139,6 +139,19 @@ async function saveConfigForSW(): Promise<void> {
   } catch (e) {
     console.warn("Nepodařilo se uložit konfiguraci pro SW:", e);
   }
+
+  // Uložit i do CapacitorKV pro Background Runner (background tracking)
+  try {
+    const BackgroundRunner = getCapacitorPlugin("BackgroundRunner");
+    if (BackgroundRunner && typeof BackgroundRunner.set === "function") {
+      await Promise.all([
+        BackgroundRunner.set({ key: "write-token", value: WRITE_TOKEN || "" }),
+        BackgroundRunner.set({ key: "sheet-url", value: SHEET_URL || "" }),
+      ]);
+    }
+  } catch (e) {
+    console.warn("Nepodařilo se uložit konfiguraci pro BackgroundRunner:", e);
+  }
 }
 
 async function swSyncRegister(): Promise<void> {

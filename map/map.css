@@ -528,3 +528,47 @@
     #lightbox-close:hover {
       color: #fff;
     }
+
+    /* ── Auto-Tracking body (track dot ikona) ── */
+    .track-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #3b82f6;
+      border: 2px solid #fff;
+      box-shadow: 0 0 4px rgba(59, 130, 246, 0.6);
+    }
+
+    /* Popup pro track body — minimalistický */
+    .track-popup .leaflet-popup-content-wrapper {
+      background: rgba(15, 15, 26, 0.92);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      min-width: 140px;
+    }
+
+    .track-popup .leaflet-popup-tip {
+      background: rgba(15, 15, 26, 0.92);
+    }
+
+    .track-popup .leaflet-popup-content {
+      margin: 8px 12px;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .track-popup-time {
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: #93c5fd;
+      margin-bottom: 3px;
+    }
+
+    .track-popup-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: rgba(255, 255, 255, 0.72);
+    }

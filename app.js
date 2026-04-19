@@ -32,6 +32,11 @@ async function init() {
     }
   });
 
+  document.getElementById("btn-tracking").addEventListener("click", () => {
+    vibrate("light");
+    openTrackingDialog();
+  });
+
   document.getElementById("btn-send").addEventListener("click", sendNote);
   document.getElementById("btn-discard").addEventListener("click", discardNote);
   document.getElementById("transcript").addEventListener("input", autoResize);
@@ -57,6 +62,9 @@ async function init() {
   }
 
   startGpsWatch();
+
+  // Inicializovat auto-tracking (obnoví tracking pokud byl zapnutý před restartem)
+  initTracking();
 
   window.addEventListener("beforeunload", () => { allowScreenOff(); stopGpsWatch(); });
   document.addEventListener("visibilitychange", () => {

@@ -14,11 +14,13 @@ const SHEET_HEADERS_ = [
   "audio_duration_sec", // col 13 (index 12)
   "photo_file_id",  // col 14 (index 13)
   "entry_id",       // col 15 (index 14) — klientské UUID pro deduplication
+  "gps_accuracy",   // col 16 (index 15) — přesnost GPS v metrech (pouze entry_type=track)
 ];
 
 const ENTRY_TYPE_TEXT_ = "text";
 const ENTRY_TYPE_AUDIO_ = "audio";
 const ENTRY_TYPE_PHOTO_ = "photo";
+const ENTRY_TYPE_TRACK_ = "track";
 
 function jsonOutput_(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(
@@ -149,10 +151,9 @@ function entryTypeFromRow_(row) {
   if (row[13]) return ENTRY_TYPE_PHOTO_;
   return ENTRY_TYPE_TEXT_;
 }
-
 function normalizeEntryType_(value) {
   const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === ENTRY_TYPE_AUDIO_ || normalized === ENTRY_TYPE_PHOTO_) {
+  if (normalized === ENTRY_TYPE_AUDIO_ || normalized === ENTRY_TYPE_PHOTO_ || normalized === ENTRY_TYPE_TRACK_) {
     return normalized;
   }
   return ENTRY_TYPE_TEXT_;
@@ -265,12 +266,17 @@ function doPost(e) {
       photoFileId = photoFile.getId();
       photoFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     }
+    // ENTRY_TYPE_TRACK_ — žádné soubory na Drive, pouze data polohy
+
+    const gpsAccuracy = (entryType === ENTRY_TYPE_TRACK_ && data.gps_accuracy != null)
+      ? data.gps_accuracy
+      : "";
 
     sheet.appendRow([
       data.time || new Date().toISOString(),
       data.lat != null ? data.lat : "",
       data.lon != null ? data.lon : "",
-      (entryType === ENTRY_TYPE_AUDIO_ || entryType === ENTRY_TYPE_PHOTO_) ? "" : neutralizeSpreadsheetFormula_(data.note),
+      (entryType === ENTRY_TYPE_AUDIO_ || entryType === ENTRY_TYPE_PHOTO_ || entryType === ENTRY_TYPE_TRACK_) ? "" : neutralizeSpreadsheetFormula_(data.note),
       data.battery ?? "",
       data.speed ?? "",
       data.altitude ?? "",
@@ -282,6 +288,7 @@ function doPost(e) {
       audioDurationSec,
       photoFileId,
       entryId,
+      gpsAccuracy,
     ]);
 
     return jsonOutput_({ ok: true, entryType, audioFileId });
@@ -331,6 +338,7 @@ function doGet(e) {
       audio_duration_sec: parseFloatOrNull_(row[12]),
       photo_file_id: row[13] || "",
       entry_id: row[14] || "",
+      gps_accuracy: parseIntOrNull_(row[15]),
     }));
 
     return jsonOutput_(result);

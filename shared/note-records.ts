@@ -2,13 +2,15 @@
 const ENTRY_TYPE_TEXT = "text" as const;
 const ENTRY_TYPE_AUDIO = "audio" as const;
 const ENTRY_TYPE_PHOTO = "photo" as const;
+const ENTRY_TYPE_TRACK = "track" as const;
 
-type NoteEntryType = typeof ENTRY_TYPE_TEXT | typeof ENTRY_TYPE_AUDIO | typeof ENTRY_TYPE_PHOTO;
+type NoteEntryType = typeof ENTRY_TYPE_TEXT | typeof ENTRY_TYPE_AUDIO | typeof ENTRY_TYPE_PHOTO | typeof ENTRY_TYPE_TRACK;
 
 const NOTE_ENTRY_TYPES: readonly NoteEntryType[] = Object.freeze([
   ENTRY_TYPE_TEXT,
   ENTRY_TYPE_AUDIO,
   ENTRY_TYPE_PHOTO,
+  ENTRY_TYPE_TRACK,
 ]);
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
@@ -63,7 +65,13 @@ interface PhotoPayload extends BaseNotePayload {
   photo_mime: string;
 }
 
-type AnyNotePayload = TextPayload | AudioPayload | PhotoPayload;
+/** Automatický tracking bod — pouze GPS poloha, bez médií. */
+interface TrackPayload extends BaseNotePayload {
+  entry_type: typeof ENTRY_TYPE_TRACK;
+  gps_accuracy: number | null;
+}
+
+type AnyNotePayload = TextPayload | AudioPayload | PhotoPayload | TrackPayload;
 
 /** Serializovaná podoba audio payloadu (Blob převeden na base64, určeno pro IndexedDB a POST). */
 interface SerializedAudioPayload extends BaseNotePayload {
@@ -75,7 +83,7 @@ interface SerializedAudioPayload extends BaseNotePayload {
   audio_filename: string;
 }
 
-type SerializedPayload = TextPayload | SerializedAudioPayload | PhotoPayload;
+type SerializedPayload = TextPayload | SerializedAudioPayload | PhotoPayload | TrackPayload;
 
 // ── Pomocné funkce ────────────────────────────────────────────────────────────
 
@@ -89,6 +97,7 @@ function normalizeEntryType(value: unknown): NoteEntryType {
 
 function inferEntryType(record: Partial<AnyNotePayload> & Record<string, unknown>): NoteEntryType {
   const explicitType = normalizeEntryType(record.entry_type);
+  if (explicitType === ENTRY_TYPE_TRACK) return ENTRY_TYPE_TRACK;
   if (explicitType !== ENTRY_TYPE_TEXT) {
     return explicitType;
   }
@@ -114,6 +123,10 @@ function isPhotoEntry(record: Partial<AnyNotePayload> & Record<string, unknown>)
 
 function isTextEntry(record: Partial<AnyNotePayload> & Record<string, unknown>): boolean {
   return inferEntryType(record) === ENTRY_TYPE_TEXT;
+}
+
+function isTrackEntry(record: Partial<AnyNotePayload> & Record<string, unknown>): boolean {
+  return inferEntryType(record) === ENTRY_TYPE_TRACK;
 }
 
 // ── Factory funkce pro vytváření payloadů ─────────────────────────────────────
@@ -148,6 +161,15 @@ function createPhotoPayload(basePayload: BaseNotePayload, photoDraft: PhotoDraft
     note: "",
     photo_base64: photoDraft.base64,
     photo_mime: photoDraft.mimeType,
+  };
+}
+
+function createTrackPayload(basePayload: BaseNotePayload, gpsAccuracy: number | null): TrackPayload {
+  return {
+    ...basePayload,
+    entry_id: crypto.randomUUID(),
+    entry_type: ENTRY_TYPE_TRACK,
+    gps_accuracy: gpsAccuracy ?? null,
   };
 }
 

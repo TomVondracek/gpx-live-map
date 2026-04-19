@@ -31,6 +31,14 @@
       <button id="btn-record" class="capture-btn">TEXT</button>
       <button id="btn-audio" class="capture-btn">ZVUK</button>
       <button id="btn-photo" class="capture-btn">FOTO</button>
+      <button id="btn-tracking" class="capture-btn capture-btn--tracking" title="Auto-tracking">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+          <path d="M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/>
+        </svg>
+        <span id="tracking-btn-label">GPS</span>
+      </button>
     </div>
 
     <textarea id="transcript" class="hidden" placeholder="Přepis se zobrazí zde…" readonly rows="2"></textarea>
@@ -100,6 +108,35 @@
     <p id="queue-empty" class="hidden">Fronta je prázdná.</p>
   </div>
 
+  <!-- Tracking dialog (bottom sheet) -->
+  <div id="tracking-overlay" class="hidden"></div>
+  <div id="tracking-dialog" class="hidden">
+    <div id="tracking-dialog-header">
+      <span>Auto-tracking</span>
+      <button id="tracking-dialog-close">✕</button>
+    </div>
+    <div id="tracking-dialog-body">
+      <p class="tracking-section-label">Interval záznamu</p>
+      <div id="tracking-interval-buttons">
+        <button id="tracking-interval-1"  class="tracking-interval-btn">1 min</button>
+        <button id="tracking-interval-2"  class="tracking-interval-btn">2 min</button>
+        <button id="tracking-interval-5"  class="tracking-interval-btn">5 min</button>
+        <button id="tracking-interval-10" class="tracking-interval-btn">10 min</button>
+        <button id="tracking-interval-15" class="tracking-interval-btn">15 min</button>
+        <button id="tracking-interval-30" class="tracking-interval-btn">30 min</button>
+        <button id="tracking-interval-60" class="tracking-interval-btn">60 min</button>
+      </div>
+      <div id="tracking-toggle-row">
+        <span id="tracking-toggle-label">Sledování polohy</span>
+        <label class="tracking-switch" aria-label="Zapnout/vypnout auto-tracking">
+          <input type="checkbox" id="tracking-toggle" />
+          <span class="tracking-switch-slider"></span>
+        </label>
+      </div>
+      <p class="tracking-info-text">Poloha se odesílá automaticky i při zamknutém telefonu. Záznamy bez signálu se odešlou po připojení.</p>
+    </div>
+  </div>
+
   <script src="./runtime-config.js"></script>
   <script src="./shared/project-config.js"></script>
   <script src="./shared/note-records.js"></script>
@@ -112,6 +149,7 @@
   <script src="./app/photo.js"></script>
   <script src="./app/api.js"></script>
   <script src="./app/ui.js"></script>
+  <script src="./app/tracking.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
