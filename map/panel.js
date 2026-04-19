@@ -131,6 +131,7 @@ const panel = document.getElementById("notes-panel");
 const fab = document.getElementById("notes-fab");
 const closeBtn = document.getElementById("notes-close");
 const backBtn = document.getElementById("map-back");
+const downloadGpxBtn = document.getElementById("map-download-gpx");
 
 function getMainScreenUrl() {
   const path = window.location.pathname || "";
@@ -168,6 +169,7 @@ function toggleMobilePanel() {
 fab.addEventListener("click", toggleMobilePanel);
 closeBtn.addEventListener("click", closeMobilePanel);
 backBtn.addEventListener("click", goBackToMainScreen);
+downloadGpxBtn.addEventListener("click", downloadOrShareGpx);
 
 map.on("click", () => {
   if (window.innerWidth <= 768) {

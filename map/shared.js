@@ -1,6 +1,10 @@
 const SHEET_URL = PROJECT_CONFIG.sheetUrl;
 const GPX_URL = PROJECT_CONFIG.gpxUrl;
 const MAP_TOKEN_STORAGE_KEY = PROJECT_CONFIG.mapTokenStorageKey;
+const isNativeApp = typeof window !== "undefined"
+  && typeof window.Capacitor !== "undefined"
+  && typeof window.Capacitor.isNativePlatform === "function"
+  && window.Capacitor.isNativePlatform();
 
 const map = L.map("map").setView([49.8, 18.27], 13);
 
@@ -48,3 +52,60 @@ const redIcon = L.icon({
 
 const audioBlobUrlCache = new Map();
 const audioFetchPromises = new Map();
+
+async function downloadOrShareGpx(event) {
+  if (!isNativeApp) {
+    return;
+  }
+
+  event.preventDefault();
+
+  const downloadLink = document.getElementById("map-download-gpx");
+  const originalLabel = downloadLink ? downloadLink.textContent : "";
+
+  try {
+    if (downloadLink) {
+      downloadLink.textContent = "Připravuji GPX…";
+    }
+
+    const response = await fetch(GPX_URL, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const file = new File([blob], "trasa.gpx", {
+      type: blob.type || "application/gpx+xml",
+      lastModified: Date.now(),
+    });
+
+    if (
+      navigator.share &&
+      navigator.canShare &&
+      navigator.canShare({ files: [file] })
+    ) {
+      await navigator.share({
+        files: [file],
+        title: "trasa.gpx",
+        text: "GPX trasa z UltraLogu",
+      });
+      return;
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
+    const tempLink = document.createElement("a");
+    tempLink.href = blobUrl;
+    tempLink.download = "trasa.gpx";
+    document.body.appendChild(tempLink);
+    tempLink.click();
+    document.body.removeChild(tempLink);
+    URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error("Stažení GPX trasy selhalo:", error);
+    window.alert("GPX trasu se nepodařilo připravit ke stažení.");
+  } finally {
+    if (downloadLink) {
+      downloadLink.textContent = originalLabel;
+    }
+  }
+}

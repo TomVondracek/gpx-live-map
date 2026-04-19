@@ -3,11 +3,9 @@ const path = require("path");
 
 const size = 1024;
 
-// Bezpečná plocha pro obsah: zaoblení rx=230 ořízne rohy ~160px od každého rohu.
-// Obsah držíme v zóně x: 210–814, y: 210–814 (padding ~210px).
-//
-// Design: GPS trasa (modrá→zelená, diagonálně) + waveform/elevační profil (bílý, střed-dolní).
-// Jednoduché, čitelné i na 48px.
+// Launcher ikona musí fungovat v kruhové/squircle masce.
+// Proto je hlavní motiv umístěný do kruhového medailonu uprostřed
+// a okolí zůstává transparentní.
 
 const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -21,50 +19,42 @@ const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000
     </linearGradient>
   </defs>
 
-  <!-- Pozadí -->
-  <rect x="0" y="0" width="${size}" height="${size}" rx="230" ry="230" fill="url(#grad-bg)"/>
+  <!-- Transparent canvas + centrální medailon -->
+  <circle cx="512" cy="512" r="348" fill="url(#grad-bg)"/>
+  <circle cx="512" cy="512" r="336" fill="none" stroke="url(#grad-track)" stroke-width="10" opacity="0.6"/>
+  <circle cx="512" cy="512" r="308" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4"/>
 
-  <!-- Jemný vnitřní rámeček (gradient, tenký) -->
-  <rect x="24" y="24" width="${size - 48}" height="${size - 48}" rx="210" ry="210"
-        fill="none" stroke="url(#grad-track)" stroke-width="8" opacity="0.5"/>
-
-  <!-- GPS trasa: diagonálně z levého-dolního středu do pravého-horního středu.
-       Vychází z (240,740) a končí na (784,240) — oba body daleko od rohů. -->
-  <path d="M 240 740
-           C 290 680, 330 640, 390 590
-           C 450 540, 500 510, 560 470
-           C 620 430, 670 390, 720 350
-           C 750 325, 770 300, 784 260"
-        fill="none" stroke="url(#grad-track)" stroke-width="28"
+  <!-- GPS trasa uvnitř medailonu -->
+  <path d="M 348 640
+           C 386 594, 422 560, 466 525
+           C 520 482, 568 448, 612 414
+           C 654 382, 688 344, 718 288"
+        fill="none" stroke="url(#grad-track)" stroke-width="30"
         stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Waypointy na trase -->
-  <circle cx="390" cy="590" r="20" fill="#22d3ee"/>
-  <circle cx="560" cy="470" r="20" fill="#22d3ee"/>
-  <circle cx="720" cy="350" r="20" fill="#22d3ee"/>
+  <circle cx="468" cy="524" r="18" fill="#22d3ee"/>
+  <circle cx="594" cy="428" r="18" fill="#22d3ee"/>
+  <circle cx="650" cy="382" r="18" fill="#22d3ee"/>
 
   <!-- Cílový bod (větší, zelený) -->
-  <circle cx="784" cy="260" r="30" fill="#86efac"/>
+  <circle cx="718" cy="288" r="28" fill="#86efac"/>
   <!-- Vnitřní tečka cílového bodu -->
-  <circle cx="784" cy="260" r="12" fill="#0f0f1a"/>
+  <circle cx="718" cy="288" r="11" fill="#0f0f1a"/>
 
   <!-- Startovní bod (modrý kroužek) -->
-  <circle cx="240" cy="740" r="26" fill="none" stroke="#3b82f6" stroke-width="14"/>
-  <circle cx="240" cy="740" r="10" fill="#3b82f6"/>
+  <circle cx="348" cy="640" r="24" fill="none" stroke="#3b82f6" stroke-width="12"/>
+  <circle cx="348" cy="640" r="9" fill="#3b82f6"/>
 
-  <!-- Elevační profil / waveform — v dolní třetině, centrovaný, mimo rohy.
-       Osa y=820, rozsah x: 260–764 — v bezpečné zóně. -->
-  <path d="M 260 820
-           Q 290 780, 320 820
-           Q 350 860, 380 820
-           Q 410 775, 440 820
-           Q 470 858, 500 820
-           Q 530 782, 560 820
-           Q 590 852, 620 820
-           Q 650 790, 680 820
-           Q 710 845, 740 820
-           Q 752 808, 764 820"
-        fill="none" stroke="white" stroke-width="14"
+  <!-- Elevační profil / waveform v dolní části medailonu -->
+  <path d="M 382 722
+           Q 406 692, 430 722
+           Q 454 748, 478 722
+           Q 502 688, 526 722
+           Q 550 748, 574 722
+           Q 598 694, 622 722
+           Q 646 746, 670 722"
+        fill="none" stroke="white" stroke-width="16"
         stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
 </svg>`;
 

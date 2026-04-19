@@ -66,7 +66,7 @@
 
     #map-download-gpx {
       display: inline-flex;
-      bottom: 76px;
+      bottom: 24px;
       cursor: pointer;
     }
 
@@ -446,7 +446,9 @@
       }
 
       #map-download-gpx {
-        bottom: 76px;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
       }
 
       #notes-panel {

@@ -36,6 +36,7 @@ const ADAPTIVE_DENSITIES = [
   { dir: "mipmap-xxhdpi",  size: 324 },
   { dir: "mipmap-xxxhdpi", size: 432 },
 ];
+const ADAPTIVE_SAFE_RATIO = 72 / 108;
 
 async function generateIcons() {
   if (!fs.existsSync(SRC)) {
@@ -80,14 +81,22 @@ async function generateIcons() {
   for (const { dir, size } of ADAPTIVE_DENSITIES) {
     const outDir = path.join(RES, dir);
     fs.mkdirSync(outDir, { recursive: true });
+    const safeSize = Math.round(size * ADAPTIVE_SAFE_RATIO);
 
     await sharp(SRC)
       .extract({ left, top, width: side, height: side })
-      .resize(size, size)
+      .resize(safeSize, safeSize)
+      .extend({
+        top: Math.floor((size - safeSize) / 2),
+        bottom: Math.ceil((size - safeSize) / 2),
+        left: Math.floor((size - safeSize) / 2),
+        right: Math.ceil((size - safeSize) / 2),
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
       .png()
       .toFile(path.join(outDir, "ic_launcher_foreground.png"));
 
-    console.log(`  ${dir}: ic_launcher_foreground.png (${size}x${size})`);
+    console.log(`  ${dir}: ic_launcher_foreground.png (${size}x${size}, safe content ${safeSize}x${safeSize})`);
   }
 
   console.log("\nAll icons generated successfully.");
