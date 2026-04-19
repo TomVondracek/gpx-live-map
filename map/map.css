@@ -36,13 +36,11 @@
       z-index: 1;
     }
 
-    #map-back {
-      display: none;
+    #map-back,
+    #map-download-gpx {
       position: fixed;
-      bottom: 24px;
       left: 16px;
       z-index: 100;
-      align-items: center;
       gap: 8px;
       border: 1px solid var(--border);
       border-radius: 28px;
@@ -53,13 +51,27 @@
       color: var(--text);
       font-size: 0.85rem;
       font-weight: 600;
-      cursor: pointer;
       box-shadow: 0 4px 20px rgba(0,0,0,0.4);
       -webkit-tap-highlight-color: transparent;
       transition: background 0.15s, transform 0.1s;
+      align-items: center;
+      text-decoration: none;
     }
 
-    #map-back:active {
+    #map-back {
+      display: none;
+      bottom: 24px;
+      cursor: pointer;
+    }
+
+    #map-download-gpx {
+      display: inline-flex;
+      bottom: 76px;
+      cursor: pointer;
+    }
+
+    #map-back:active,
+    #map-download-gpx:active {
       transform: scale(0.97);
     }
 
@@ -431,6 +443,10 @@
       #map-back {
         display: inline-flex;
         align-items: center;
+      }
+
+      #map-download-gpx {
+        bottom: 76px;
       }
 
       #notes-panel {

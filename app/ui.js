@@ -53,6 +53,32 @@ function getMapLinkTarget() {
   return `${baseHref}#token=${encodeURIComponent(READ_TOKEN)}`;
 }
 
+function getAbsoluteMapLinkTarget() {
+  return new URL(getMapLinkTarget(), window.location.href).toString();
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const helper = document.createElement("textarea");
+  helper.value = text;
+  helper.setAttribute("readonly", "");
+  helper.style.position = "fixed";
+  helper.style.opacity = "0";
+  document.body.appendChild(helper);
+  helper.focus();
+  helper.select();
+
+  try {
+    document.execCommand("copy");
+  } finally {
+    document.body.removeChild(helper);
+  }
+}
+
 function configureMapLinks() {
   const links = document.querySelectorAll("[data-map-link]");
   if (!links.length) return;
@@ -64,6 +90,21 @@ function configureMapLinks() {
       event.preventDefault();
       window.location.assign(target);
     });
+  });
+}
+
+function configureMapShareButton() {
+  const shareButton = document.querySelector("[data-copy-map-link]");
+  if (!shareButton) return;
+
+  shareButton.addEventListener("click", async () => {
+    try {
+      await copyTextToClipboard(getAbsoluteMapLinkTarget());
+      showSuccess("Odkaz na mapu zkopírován do schránky.");
+    } catch (error) {
+      console.error("Kopírování odkazu na mapu selhalo:", error);
+      showError("Odkaz na mapu se nepodařilo zkopírovat.");
+    }
   });
 }
 

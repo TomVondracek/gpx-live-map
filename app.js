@@ -43,6 +43,7 @@ async function init() {
   document.getElementById("queue-overlay").addEventListener("click", closeQueuePanel);
 
   configureMapLinks();
+  configureMapShareButton();
 
   initSpeech().then(() => {
     updateStatus();
