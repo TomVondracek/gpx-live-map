@@ -1,18 +1,5 @@
 // ── Inicializace ──────────────────────────────────────────────────────────────
 async function init() {
-  // Glove mode — načíst z localStorage před prvním renderem
-  try { gloveMode = localStorage.getItem("gloveMode") === "true"; } catch {}
-  document.body.classList.toggle("glove", gloveMode);
-  const gloveBtn = document.getElementById("btn-glove");
-  if (gloveBtn) {
-    gloveBtn.setAttribute("aria-pressed", String(gloveMode));
-    gloveBtn.classList.toggle("glove-active", gloveMode);
-    gloveBtn.addEventListener("click", () => {
-      vibrate("light");
-      setGloveMode(!gloveMode);
-    });
-  }
-
   await Promise.all([
     initNetwork(),
     initBattery(),

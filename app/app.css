@@ -157,13 +157,13 @@
     }
 
     .capture-btn {
-      width: min(40vw, 152px);
-      height: min(40vw, 152px);
+      width: min(44vw, 172px);
+      height: min(44vw, 172px);
       border-radius: 50%;
-      border: 3px solid var(--border);
+      border: 4px solid var(--border);
       background: rgba(255, 255, 255, 0.05);
       color: var(--text);
-      font-size: 1.05rem;
+      font-size: 1.3rem;
       font-weight: 700;
       letter-spacing: 0.1em;
       cursor: pointer;
@@ -209,7 +209,7 @@
     }
 
     .capture-btn:disabled {
-      opacity: 0.4;
+      opacity: 0.6;
       cursor: not-allowed;
       animation: none;
     }
@@ -685,146 +685,3 @@
       }
     }
 
-    /* ── Glove mode toggle tlačítko (vždy viditelné ve status baru) ── */
-    #btn-glove {
-      margin-left: auto;
-      background: transparent;
-      border: 1px solid transparent;
-      border-radius: 999px;
-      color: var(--muted);
-      font-size: 1rem;
-      line-height: 1;
-      padding: 4px 8px;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-      transition: color 0.2s, border-color 0.2s, background 0.2s;
-      flex-shrink: 0;
-    }
-
-    #btn-glove:active { opacity: 0.7; }
-
-    #btn-glove.glove-active {
-      color: #f6d98f;
-      border-color: rgba(233, 196, 106, 0.5);
-      background: rgba(233, 196, 106, 0.12);
-    }
-
-    /* ── Audio play button (viditelný jen v glove mode) ── */
-    #audio-play-btn {
-      width: 100%;
-      min-height: 64px;
-      background: linear-gradient(135deg, #2ab5a5, #1f8a7d);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius);
-      font-size: 1.2rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-      box-shadow: 0 4px 14px rgba(42, 157, 143, 0.35);
-      transition: opacity 0.15s, transform 0.1s;
-    }
-
-    #audio-play-btn:active { transform: scale(0.97); }
-    #audio-play-btn.hidden { display: none; }
-
-    /* ── Queue badge – neklikatelná verze pro glove mode ── */
-    .queue-badge-static {
-      background: rgba(233, 196, 106, 0.18);
-      border: 1px solid rgba(233, 196, 106, 0.45);
-      border-radius: 999px;
-      color: #f6d98f;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      padding: 2px 10px;
-    }
-
-    /* ════════════════════════════════════════════════════════════════════════
-       GLOVE MODE — body.glove overrides
-       Vše pod tímto selektorem je aktivní pouze v režimu rukavic.
-       ════════════════════════════════════════════════════════════════════════ */
-
-    /* Přepsat design tokeny pro vyšší kontrast */
-    body.glove {
-      --muted:  #9496b0;
-      --border: rgba(255, 255, 255, 0.20);
-    }
-
-    /* Capture tlačítka — větší, silnější text */
-    body.glove .capture-btn {
-      width:  min(44vw, 172px);
-      height: min(44vw, 172px);
-      font-size: 1.3rem;
-      border-width: 4px;
-    }
-
-    body.glove .capture-btn:disabled {
-      opacity: 0.6;
-    }
-
-    /* Send / Discard — vertikálně pod sebou, větší plocha */
-    body.glove #section-confirm {
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    body.glove .btn {
-      min-height: 64px;
-      font-size: 1.2rem;
-      padding: 20px 24px;
-    }
-
-    body.glove #btn-discard {
-      color: #b0b2cc;
-      border-color: rgba(255, 255, 255, 0.25);
-    }
-
-    /* Textarea — větší, vždy read-only (klávesnice se neotvírá) */
-    body.glove #transcript {
-      min-height: 120px;
-      font-size: 1.15rem;
-      line-height: 1.6;
-    }
-
-    /* Audio preview — skrýt nativní scrubber, ukázat velké tlačítko */
-    body.glove #audio-player {
-      display: none;
-    }
-
-    body.glove #audio-play-btn {
-      display: block;
-    }
-
-    /* Recording indicator — větší a čitelnější */
-    body.glove #recording-indicator {
-      font-size: 1.1rem;
-    }
-
-    body.glove #recording-indicator .dot {
-      width: 14px;
-      height: 14px;
-    }
-
-    /* Audio preview meta text */
-    body.glove #audio-preview-meta {
-      font-size: 1rem;
-    }
-
-    /* Footer — plný kontrast, větší tap target */
-    body.glove footer {
-      padding: 0;
-    }
-
-    body.glove footer a {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 48px;
-      opacity: 1;
-      color: var(--text);
-      font-size: 0.95rem;
-    }

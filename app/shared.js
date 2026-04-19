@@ -50,7 +50,6 @@ let wakeLock = null;
 let lastGpsAccuracy = null;
 let lastGpsCoords = null;
 let gpsWatchId = null;
-let gloveMode = false;
 
 // ── Haptická odezva ───────────────────────────────────────────────────────────
 async function vibrate(type = "light") {
@@ -286,7 +285,6 @@ function showAudioPreview(audioNote) {
   const preview = document.getElementById("audio-preview");
   const player = document.getElementById("audio-player");
   const meta = document.getElementById("audio-preview-meta");
-  const playBtn = document.getElementById("audio-play-btn");
   if (!preview || !player || !meta) return;
 
   clearPendingAudioPreview();
@@ -297,29 +295,6 @@ function showAudioPreview(audioNote) {
   player.load();
   meta.textContent = `Délka: ${formatAudioDuration(audioNote.durationSec)}`;
   preview.classList.remove("hidden");
-
-  // Glove mode: velké Play/Pause tlačítko místo nativního scrubberu
-  if (playBtn) {
-    if (gloveMode) {
-      playBtn.classList.remove("hidden");
-      playBtn.textContent = "▶ Přehrát";
-      // Odstranit starý listener a přidat nový
-      const newBtn = playBtn.cloneNode(true);
-      playBtn.parentNode.replaceChild(newBtn, playBtn);
-      newBtn.addEventListener("click", () => {
-        if (player.paused) {
-          player.play();
-          newBtn.textContent = "⏸ Pozastavit";
-        } else {
-          player.pause();
-          newBtn.textContent = "▶ Přehrát";
-        }
-      });
-      player.addEventListener("ended", () => { newBtn.textContent = "▶ Přehrát"; }, { once: false });
-    } else {
-      playBtn.classList.add("hidden");
-    }
-  }
 }
 
 function blobToBase64(blob) {
