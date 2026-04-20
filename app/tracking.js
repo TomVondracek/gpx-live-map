@@ -54,7 +54,8 @@ async function sendTrackPoint() {
     let lon = null;
     let speed = null;
     let altitude = null;
-    const CACHE_MAX_AGE_MS = 60000; // pro tracking akceptujeme cache až 60s
+    // Pro tracking akceptujeme GPS cache až 5 minut — telefon leží bez pohybu
+    const CACHE_MAX_AGE_MS = 5 * 60 * 1000;
 
     const cacheAge = lastGpsCoords ? (Date.now() - lastGpsCoords.ts) : Infinity;
     if (lastGpsCoords && cacheAge <= CACHE_MAX_AGE_MS) {
@@ -62,15 +63,17 @@ async function sendTrackPoint() {
       lon = lastGpsCoords.lon;
       speed = lastGpsCoords.speed;
       altitude = lastGpsCoords.altitude;
+      console.log("Auto-tracking: GPS z cache, stáří:", Math.round(cacheAge / 1000), "s");
     } else {
       // Fallback: jednorázové získání polohy
+      console.log("Auto-tracking: GPS cache stará/chybí, volám getCurrentPosition...");
       try {
         const Geolocation = getCapacitorPlugin("Geolocation");
         if (Geolocation) {
           const pos = await Geolocation.getCurrentPosition({
             enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0,
+            timeout: 10000,
+            maximumAge: 60000,
           });
           lat = pos.coords.latitude;
           lon = pos.coords.longitude;
@@ -83,10 +86,11 @@ async function sendTrackPoint() {
           if (pos.coords.accuracy != null) {
             lastGpsAccuracy = Math.round(pos.coords.accuracy);
           }
+          console.log("Auto-tracking: GPS získána:", lat, lon);
         }
       } catch (gpsErr) {
-        console.warn("Auto-tracking: GPS nedostupná, bod vynechán:", gpsErr);
-        return; // bod bez GPS nemá smysl odesílat
+        // GPS selhala — odešleme bod bez polohy (aspoň baterie/čas se zaznamená)
+        console.warn("Auto-tracking: GPS nedostupná, odesílám bez polohy:", gpsErr);
       }
     }
 
@@ -101,30 +105,43 @@ async function sendTrackPoint() {
     };
 
     const payload = createTrackPayload(base, lastGpsAccuracy);
+    console.log("Auto-tracking: odesílám payload:", JSON.stringify({
+      entry_type: payload.entry_type,
+      time: payload.time,
+      lat: payload.lat,
+      lon: payload.lon,
+      battery: payload.battery,
+      gps_accuracy: payload.gps_accuracy,
+    }));
 
     if (isOnline) {
       try {
         await directPost(payload);
-        console.log("Auto-tracking: bod odeslán", payload.time);
+        console.log("Auto-tracking: bod úspěšně odeslán", payload.time);
+        showSuccess("Tracking: bod odeslán");
       } catch (postErr) {
         const err = postErr;
         if (err && (err.code === "UNAUTHORIZED" || err.code === "CONFIG")) {
-          console.error("Auto-tracking: neautorizováno, tracking zastaven");
+          console.error("Auto-tracking: neautorizováno, tracking zastaven:", err.message);
+          showError("Tracking zastaven: " + err.message);
           stopTracking();
           return;
         }
         // Síťová chyba → fronta
+        console.warn("Auto-tracking: přímé odeslání selhalo, ukládám do fronty:", postErr);
         await enqueue(payload);
         swSyncRegister();
-        console.log("Auto-tracking: bod zařazen do fronty");
+        showSuccess("Tracking: bod zařazen do fronty");
       }
     } else {
       await enqueue(payload);
       swSyncRegister();
       console.log("Auto-tracking: offline, bod zařazen do fronty");
+      showSuccess("Tracking offline: bod ve frontě");
     }
   } catch (err) {
-    console.error("Auto-tracking: chyba při odesílání bodu:", err);
+    console.error("Auto-tracking: neočekávaná chyba při odesílání bodu:", err);
+    showError("Tracking chyba: " + err.message);
   }
 }
 
