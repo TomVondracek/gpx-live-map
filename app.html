@@ -17,10 +17,11 @@
     </div>
   </section>
 
-  <div id="status-bar">
-    <span id="status-dot"></span>
-    <span id="status-text">Načítání…</span>
-  </div>
+    <div id="status-bar">
+      <span id="status-dot"></span>
+      <span id="status-text">Načítání…</span>
+      <button id="tracking-badge" type="button" aria-label="Nastavení trackingu"></button>
+    </div>
 
   <main>
     <div id="recording-indicator" class="hidden">
@@ -31,14 +32,6 @@
       <button id="btn-record" class="capture-btn">TEXT</button>
       <button id="btn-audio" class="capture-btn">ZVUK</button>
       <button id="btn-photo" class="capture-btn">FOTO</button>
-      <button id="btn-tracking" class="capture-btn capture-btn--tracking" title="Auto-tracking">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-          <path d="M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/>
-        </svg>
-        <span id="tracking-btn-label">GPS</span>
-      </button>
     </div>
 
     <textarea id="transcript" class="hidden" placeholder="Přepis se zobrazí zde…" readonly rows="2"></textarea>
@@ -133,7 +126,7 @@
           <span class="tracking-switch-slider"></span>
         </label>
       </div>
-      <p class="tracking-info-text">Při otevřené aplikaci běží zvolený interval přesně. Na pozadí Android spouští tracking jen přibližně a typicky nejdřív po 15 minutách. Záznamy bez signálu se odešlou po připojení.</p>
+      <p class="tracking-info-text">Na Androidu běží po zapnutí tracking i při zamčeném telefonu nebo zavřené aplikaci jako systémová foreground služba. Kratší intervaly znamenají vyšší spotřebu baterie. Body bez signálu se odešlou později po připojení.</p>
     </div>
   </div>
 

@@ -32,11 +32,6 @@ async function init() {
     }
   });
 
-  document.getElementById("btn-tracking").addEventListener("click", () => {
-    vibrate("light");
-    openTrackingDialog();
-  });
-
   document.getElementById("btn-send").addEventListener("click", sendNote);
   document.getElementById("btn-discard").addEventListener("click", discardNote);
   document.getElementById("transcript").addEventListener("input", autoResize);

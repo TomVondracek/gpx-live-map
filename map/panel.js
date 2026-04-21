@@ -10,7 +10,8 @@ function renderNotesList(validPoints) {
   const countBadge = document.getElementById("notes-count");
   const fabCount = document.getElementById("fab-count");
 
-  const reversed = [...validPoints].reverse();
+  const visibleNotes = validPoints.filter((point) => getEntryType(point) !== ENTRY_TYPE_TRACK);
+  const reversed = [...visibleNotes].reverse();
 
   countBadge.textContent = reversed.length;
   fabCount.textContent = reversed.length;

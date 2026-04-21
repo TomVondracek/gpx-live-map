@@ -141,9 +141,9 @@ function renderTrack(validPoints) {
   const latlngs = validPoints.map((point) => [Number(point.lat), Number(point.lon)]);
   notesPolyline = L.polyline(latlngs, {
     color: "#22d3ee",
-    weight: 2,
-    opacity: 0.5,
-    dashArray: "6, 6",
+    weight: 3,
+    opacity: 0.72,
+    dashArray: "7, 5",
   }).addTo(map);
   addArrowsForSegments(latlngs, 0);
 }
@@ -594,7 +594,7 @@ function addArrowsForSegments(latlngs, fromIndex) {
         html: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"
                     style="transform:rotate(${angle}deg);display:block;">
                  <polygon points="7,0 13,13 7,9 1,13"
-                          fill="#22d3ee" opacity="0.7"/>
+                          fill="#22d3ee" opacity="0.82"/>
                </svg>`,
         iconSize: [14, 14],
         iconAnchor: [7, 7],

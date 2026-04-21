@@ -269,6 +269,8 @@ async function initTracking() {
   const settings = getTrackingSettings();
   _trackingIntervalMin = settings.intervalMin;
 
+  updateTrackingBadge(settings.enabled, settings.intervalMin);
+
   if (settings.enabled) {
     console.log("Auto-tracking: obnovuji tracking po restartu aplikace");
     await startTracking(settings.intervalMin);

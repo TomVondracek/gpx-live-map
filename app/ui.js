@@ -148,30 +148,19 @@ async function updateStatus() {
 // ── Tracking badge ve status baru ─────────────────────────────────────────────
 
 function updateTrackingBadge(enabled, intervalMin) {
-  // Aktualizovat styl tlačítka v capture-actions
-  const btn = document.getElementById("btn-tracking");
-  const label = document.getElementById("tracking-btn-label");
-  if (btn) {
-    btn.classList.toggle("is-active", enabled);
-  }
-  if (label) {
-    label.textContent = enabled ? `${intervalMin}m` : "GPS";
+  const badge = document.getElementById("tracking-badge");
+  if (!badge) {
+    return;
   }
 
-  // Přidat/odebrat badge ze status baru
-  let badge = document.getElementById("tracking-badge");
-  if (enabled) {
-    if (!badge) {
-      badge = document.createElement("button");
-      badge.id = "tracking-badge";
-      badge.addEventListener("click", () => { vibrate("light"); openTrackingDialog(); });
-      const statusText = document.getElementById("status-text");
-      if (statusText && statusText.parentNode) {
-        statusText.parentNode.insertBefore(badge, statusText.nextSibling);
-      }
-    }
-    badge.innerHTML = `<span class="tracking-dot"></span> Tracking · ${intervalMin} min`;
-  } else {
-    if (badge) badge.remove();
+  if (!badge.dataset.bound) {
+    badge.addEventListener("click", () => { vibrate("light"); openTrackingDialog(); });
+    badge.dataset.bound = "1";
   }
+
+  badge.classList.toggle("is-active", enabled);
+  badge.classList.toggle("is-inactive", !enabled);
+  badge.innerHTML = enabled
+    ? `<span class="tracking-dot"></span> Tracking ${intervalMin} min`
+    : `<span class="tracking-dot"></span> Tracking vypnut`;
 }

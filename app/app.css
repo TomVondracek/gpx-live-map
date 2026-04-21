@@ -83,6 +83,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-wrap: wrap;
       gap: 6px;
     }
 
@@ -712,57 +713,45 @@
       }
     }
 
-    /* ── Auto-Tracking tlačítko ── */
-    .capture-btn--tracking {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      border-color: #3b82f6;
-      background: rgba(59, 130, 246, 0.08);
-      color: #3b82f6;
-      box-shadow: 0 0 12px 2px rgba(59, 130, 246, 0.15);
-    }
-
-    .capture-btn--tracking.is-active {
-      border-color: #22c55e;
-      background: rgba(34, 197, 94, 0.12);
-      color: #22c55e;
-      box-shadow: 0 0 18px 4px rgba(34, 197, 94, 0.3);
-      animation: tracking-glow 2s ease-in-out infinite;
-    }
-
-    @keyframes tracking-glow {
-      0%, 100% { box-shadow: 0 0 18px 4px rgba(34, 197, 94, 0.3); }
-      50%       { box-shadow: 0 0 32px 10px rgba(34, 197, 94, 0.55); }
-    }
-
     /* ── Tracking status badge ── */
     #tracking-badge {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      background: rgba(34, 197, 94, 0.15);
-      border: 1px solid rgba(34, 197, 94, 0.4);
-      color: #22c55e;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: var(--muted);
       border-radius: 10px;
       padding: 2px 8px;
       font-size: 0.75rem;
       font-weight: 600;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
     }
 
     #tracking-badge .tracking-dot {
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: #22c55e;
+      background: currentColor;
+    }
+
+    #tracking-badge.is-active {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: rgba(34, 197, 94, 0.4);
+      color: #22c55e;
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.14);
+    }
+
+    #tracking-badge.is-active .tracking-dot {
       animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    #tracking-badge.is-inactive {
+      background: rgba(230, 57, 70, 0.1);
+      border-color: rgba(230, 57, 70, 0.28);
+      color: #ff9aa3;
     }
 
     /* ── Tracking dialog (bottom sheet) ── */
