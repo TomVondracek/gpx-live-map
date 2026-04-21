@@ -1,6 +1,6 @@
 // ── Auto-Tracking Engine ──────────────────────────────────────────────────────
 // Periodicky odesílá GPS polohu jako TrackPayload (entry_type="track").
-// Funguje i při zamknutém telefonu přes Background Runner plugin.
+// Na Androidu běží přes foreground service, mimo Android přes Background Runner.
 //
 // Závislosti (globální proměnné z ostatních modulů):
 //   lastGpsCoords, lastGpsAccuracy, batteryLevel  — z app/gps.js + app/shared.js
@@ -19,6 +19,19 @@ const TRACKING_DEFAULT_INTERVAL_MIN = 5;
 let _trackingTimerId = null;
 let _trackingEnabled = false;
 let _trackingIntervalMin = TRACKING_DEFAULT_INTERVAL_MIN;
+
+function isNativeAndroidPlatform() {
+  return typeof Capacitor !== "undefined"
+    && typeof Capacitor.getPlatform === "function"
+    && Capacitor.getPlatform() === "android";
+}
+
+function getNativeTrackingPlugin() {
+  if (!isNativeAndroidPlatform()) {
+    return null;
+  }
+  return getCapacitorPlugin("TrackingService");
+}
 
 // ── Nastavení ─────────────────────────────────────────────────────────────────
 
@@ -147,7 +160,7 @@ async function sendTrackPoint() {
 
 // ── Start / Stop ──────────────────────────────────────────────────────────────
 
-function startTracking(intervalMin) {
+async function startTracking(intervalMin) {
   const validInterval = TRACKING_INTERVALS_MIN.includes(intervalMin)
     ? intervalMin
     : TRACKING_DEFAULT_INTERVAL_MIN;
@@ -163,29 +176,43 @@ function startTracking(intervalMin) {
     _trackingTimerId = null;
   }
 
+  const nativePlugin = getNativeTrackingPlugin();
+  if (nativePlugin) {
+    const started = await _startNativeTrackingService(nativePlugin, validInterval);
+    if (!started) {
+      _trackingEnabled = false;
+      saveTrackingSettings(false, validInterval);
+      updateTrackingBadge(false, validInterval);
+      updateTrackingDialogUI();
+      return false;
+    }
+  } else {
+    const intervalMs = validInterval * 60 * 1000;
+    _trackingTimerId = setInterval(sendTrackPoint, intervalMs);
+    sendTrackPoint();
+    _startBackgroundRunner(validInterval);
+  }
+
   _trackingEnabled = true;
   _trackingIntervalMin = validInterval;
   saveTrackingSettings(true, validInterval);
-
-  const intervalMs = validInterval * 60 * 1000;
-  _trackingTimerId = setInterval(sendTrackPoint, intervalMs);
-
-  // Okamžitě odeslat první bod
-  sendTrackPoint();
-
-  // Spustit Background Runner pro pozadí
-  _startBackgroundRunner(validInterval);
 
   updateTrackingBadge(true, validInterval);
   updateTrackingDialogUI();
 
   console.log(`Auto-tracking spuštěn, interval: ${validInterval} min`);
+  return true;
 }
 
 function stopTracking() {
   if (_trackingTimerId !== null) {
     clearInterval(_trackingTimerId);
     _trackingTimerId = null;
+  }
+
+  const nativePlugin = getNativeTrackingPlugin();
+  if (nativePlugin && typeof nativePlugin.stopService === "function") {
+    nativePlugin.stopService().catch((e) => console.warn("TrackingService stopService selhalo:", e));
   }
 
   _trackingEnabled = false;
@@ -203,6 +230,7 @@ function stopTracking() {
 // ── Background Runner (Capacitor) ─────────────────────────────────────────────
 
 function _startBackgroundRunner(intervalMin) {
+  if (isNativeAndroidPlatform()) return;
   try {
     const BackgroundRunner = getCapacitorPlugin("CapacitorBackgroundRunner");
     if (!BackgroundRunner) return;
@@ -221,6 +249,7 @@ function _startBackgroundRunner(intervalMin) {
 }
 
 function _stopBackgroundRunner() {
+  if (isNativeAndroidPlatform()) return;
   try {
     const BackgroundRunner = getCapacitorPlugin("CapacitorBackgroundRunner");
     if (!BackgroundRunner) return;
@@ -236,13 +265,13 @@ function _stopBackgroundRunner() {
 
 // ── Inicializace (voláno z app.js při startu) ─────────────────────────────────
 
-function initTracking() {
+async function initTracking() {
   const settings = getTrackingSettings();
   _trackingIntervalMin = settings.intervalMin;
 
   if (settings.enabled) {
     console.log("Auto-tracking: obnovuji tracking po restartu aplikace");
-    startTracking(settings.intervalMin);
+    await startTracking(settings.intervalMin);
   }
 
   // Inicializovat dialog UI
@@ -282,9 +311,12 @@ function updateTrackingDialogUI() {
 function _bindTrackingDialog() {
   const toggle = document.getElementById("tracking-toggle");
   if (toggle) {
-    toggle.addEventListener("change", () => {
+    toggle.addEventListener("change", async () => {
       if (toggle.checked) {
-        startTracking(_trackingIntervalMin);
+        const started = await startTracking(_trackingIntervalMin);
+        if (!started) {
+          toggle.checked = false;
+        }
       } else {
         stopTracking();
       }
@@ -295,13 +327,17 @@ function _bindTrackingDialog() {
   TRACKING_INTERVALS_MIN.forEach((min) => {
     const btn = document.getElementById(`tracking-interval-${min}`);
     if (btn) {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         _trackingIntervalMin = min;
         saveTrackingSettings(_trackingEnabled, min);
         updateTrackingDialogUI();
         // Pokud je tracking zapnutý, restartovat s novým intervalem
         if (_trackingEnabled) {
-          startTracking(min);
+          const started = await startTracking(min);
+          if (!started) {
+            const toggle = document.getElementById("tracking-toggle");
+            if (toggle) toggle.checked = false;
+          }
         }
       });
     }
@@ -312,4 +348,38 @@ function _bindTrackingDialog() {
 
   const overlay = document.getElementById("tracking-overlay");
   if (overlay) overlay.addEventListener("click", closeTrackingDialog);
+}
+
+async function _startNativeTrackingService(plugin, intervalMin) {
+  try {
+    if (typeof plugin.checkTrackingPermissions !== "function"
+      || typeof plugin.requestTrackingPermissions !== "function"
+      || typeof plugin.startService !== "function") {
+      console.warn("TrackingService plugin nemá očekávané metody, padám zpět na JS tracking");
+      return false;
+    }
+
+    let permissions = await plugin.checkTrackingPermissions();
+    if (!permissions || permissions.canStart !== true) {
+      permissions = await plugin.requestTrackingPermissions();
+    }
+
+    if (!permissions || permissions.canStart !== true) {
+      showError("Tracking potřebuje povolenou polohu na pozadí. V Android dialogu prosím povol \"Vždy\".");
+      return false;
+    }
+
+    await plugin.startService({
+      intervalMin,
+      sheetUrl: SHEET_URL || "",
+      writeToken: WRITE_TOKEN || "",
+    });
+
+    console.log(`TrackingService spuštěn nativně, interval: ${intervalMin} min`);
+    return true;
+  } catch (err) {
+    console.error("TrackingService start selhal:", err);
+    showError("Nepodařilo se spustit nativní tracking službu: " + (err && err.message ? err.message : err));
+    return false;
+  }
 }

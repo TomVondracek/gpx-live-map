@@ -7,7 +7,7 @@ Mobilní Android aplikace pro zaznamenávání poznámek při běhu (text / audi
 ## Deploy Status
 
 <!-- DEPLOY_STATUS:START -->
-- Poslední úspěšný deploy: 2026-04-21 09:30:11
+- Poslední úspěšný deploy: 2026-04-21 10:01:47
 - Agent: Codex (GPT-5.4)
 - APK build: fresh Gradle debug rebuild
 - APK cesta: `android\app\build\outputs\apk\debug\app-debug.apk`
