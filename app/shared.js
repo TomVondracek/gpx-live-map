@@ -18,7 +18,16 @@ const AUDIO_MIME_CANDIDATES = [
 // Nepoužíváme ES modules / import, protože nemáme bundler.
 function getCapacitorPlugin(name) {
   if (typeof Capacitor !== "undefined" && Capacitor.Plugins) {
-    return Capacitor.Plugins[name] || null;
+    const plugins = Capacitor.Plugins;
+    if (plugins[name]) {
+      return plugins[name];
+    }
+    if (name === "BackgroundRunner") {
+      return plugins.CapacitorBackgroundRunner || null;
+    }
+    if (name === "CapacitorBackgroundRunner") {
+      return plugins.BackgroundRunner || null;
+    }
   }
   return null;
 }

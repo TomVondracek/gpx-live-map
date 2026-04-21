@@ -140,18 +140,6 @@ async function saveConfigForSW(): Promise<void> {
     console.warn("Nepodařilo se uložit konfiguraci pro SW:", e);
   }
 
-  // Uložit i do CapacitorKV pro Background Runner (background tracking)
-  try {
-    const BackgroundRunner = getCapacitorPlugin("BackgroundRunner");
-    if (BackgroundRunner && typeof BackgroundRunner.set === "function") {
-      await Promise.all([
-        BackgroundRunner.set({ key: "write-token", value: WRITE_TOKEN || "" }),
-        BackgroundRunner.set({ key: "sheet-url", value: SHEET_URL || "" }),
-      ]);
-    }
-  } catch (e) {
-    console.warn("Nepodařilo se uložit konfiguraci pro BackgroundRunner:", e);
-  }
 }
 
 async function swSyncRegister(): Promise<void> {
@@ -185,6 +173,11 @@ function formatQueueItemLabel(record: QueueRecord): QueueItemLabel {
   }
   if (type === ENTRY_TYPE_PHOTO) {
     return { icon: "📷", label: "Fotografie" };
+  }
+  if (type === ENTRY_TYPE_TRACK) {
+    const payload = record.payload as TrackPayload;
+    const accuracyText = payload.gps_accuracy != null ? ` · ±${payload.gps_accuracy} m` : "";
+    return { icon: "📍", label: "Tracking bod" + accuracyText };
   }
   const note = String(record.payload && (record.payload as TextPayload).note || "").trim();
   const preview = note.length > 40 ? note.slice(0, 40) + "…" : (note || "Textová poznámka");

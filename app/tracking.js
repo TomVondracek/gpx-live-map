@@ -204,12 +204,16 @@ function stopTracking() {
 
 function _startBackgroundRunner(intervalMin) {
   try {
-    const BackgroundRunner = getCapacitorPlugin("BackgroundRunner");
+    const BackgroundRunner = getCapacitorPlugin("CapacitorBackgroundRunner");
     if (!BackgroundRunner) return;
     BackgroundRunner.dispatchEvent({
       label: "cz.behpoznamky.app.background",
       event: "startTracking",
-      details: { intervalMin },
+      details: {
+        intervalMin,
+        sheetUrl: SHEET_URL || "",
+        writeToken: WRITE_TOKEN || "",
+      },
     }).catch((e) => console.warn("BackgroundRunner dispatchEvent selhalo:", e));
   } catch (e) {
     console.warn("BackgroundRunner nedostupný:", e);
@@ -218,7 +222,7 @@ function _startBackgroundRunner(intervalMin) {
 
 function _stopBackgroundRunner() {
   try {
-    const BackgroundRunner = getCapacitorPlugin("BackgroundRunner");
+    const BackgroundRunner = getCapacitorPlugin("CapacitorBackgroundRunner");
     if (!BackgroundRunner) return;
     BackgroundRunner.dispatchEvent({
       label: "cz.behpoznamky.app.background",

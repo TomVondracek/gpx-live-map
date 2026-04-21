@@ -21,9 +21,11 @@ const config: CapacitorConfig = {
       label: "cz.behpoznamky.app.background",
       src: "runner.js",
       event: "trackPoint",
-      repeat: false,   // interval řídíme sami přes dispatchEvent
-      interval: 0,
-      autoStart: false,
+      // Android WorkManager opakuje background task nejdříve po 15 minutách.
+      // Jemnější intervaly držíme jen ve foregroundu přes setInterval.
+      repeat: true,
+      interval: 15,
+      autoStart: true,
     },
   },
 };

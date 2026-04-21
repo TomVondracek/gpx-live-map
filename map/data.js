@@ -337,6 +337,8 @@ function createTrackMarker(point) {
 
   return marker;
 }
+
+function createMultiMarker(entries, locationKey) {
   const lat = entries[0].lat;
   const lon = entries[0].lon;
   const containsLast = entries.some((entry) => entry.isLast);

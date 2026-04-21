@@ -1,117 +1,106 @@
 // ── Background Runner Script ──────────────────────────────────────────────────
 // Tento soubor běží v izolovaném JS prostředí Background Runner pluginu.
-// Nemá přístup k DOM, window, ani jiným globálním proměnným hlavní WebView.
-// Dostupné API: CapacitorGeolocation, CapacitorDevice, CapacitorKV, fetch
-//
-// Komunikace s hlavní app: CapacitorKV (key-value store sdílený s WebView)
-// Konfigurace (SHEET_URL, WRITE_TOKEN) jsou uloženy přes CapacitorKV z app/queue.ts
+// Nemá přístup k DOM ani ke stavu hlavní WebView.
+// Dostupné API: CapacitorGeolocation, CapacitorDevice, CapacitorKV, fetch, crypto
 
-addEventListener("startTracking", async (detail) => {
-  // Uložit nastavení intervalu pro případné budoucí běhy
-  const intervalMin = (detail && detail.intervalMin) ? Number(detail.intervalMin) : 5;
-  await CapacitorKV.set({ key: "bg-tracking-interval", value: String(intervalMin) });
-  await CapacitorKV.set({ key: "bg-tracking-enabled", value: "true" });
-  console.log(`[runner] Auto-tracking spuštěn, interval: ${intervalMin} min`);
+const TRACKING_ENABLED_KEY = "bg-tracking-enabled";
+const TRACKING_INTERVAL_KEY = "bg-tracking-interval";
+const TRACKING_LAST_POINT_AT_KEY = "bg-tracking-last-point-at";
+const SHEET_URL_KEY = "sheet-url";
+const WRITE_TOKEN_KEY = "write-token";
+const BG_QUEUE_KEY = "bg-queue";
+const ANDROID_BG_MIN_INTERVAL_MIN = 15;
+
+addEventListener("startTracking", async (resolve, reject, args) => {
+  try {
+    const requestedInterval = Number(args && args.intervalMin);
+    const intervalMin = Number.isFinite(requestedInterval) && requestedInterval > 0
+      ? Math.round(requestedInterval)
+      : 5;
+
+    CapacitorKV.set(TRACKING_INTERVAL_KEY, String(intervalMin));
+    CapacitorKV.set(TRACKING_ENABLED_KEY, "true");
+    if (args && typeof args.sheetUrl === "string" && args.sheetUrl) {
+      CapacitorKV.set(SHEET_URL_KEY, args.sheetUrl);
+    }
+    if (args && typeof args.writeToken === "string" && args.writeToken) {
+      CapacitorKV.set(WRITE_TOKEN_KEY, args.writeToken);
+    }
+
+    console.log(`[runner] Auto-tracking spuštěn, cílový interval: ${intervalMin} min`);
+    resolve();
+  } catch (err) {
+    reject(err);
+  }
 });
 
-addEventListener("stopTracking", async () => {
-  await CapacitorKV.set({ key: "bg-tracking-enabled", value: "false" });
-  console.log("[runner] Auto-tracking zastaven");
+addEventListener("stopTracking", async (resolve, reject) => {
+  try {
+    CapacitorKV.set(TRACKING_ENABLED_KEY, "false");
+    console.log("[runner] Auto-tracking zastaven");
+    resolve();
+  } catch (err) {
+    reject(err);
+  }
 });
 
-addEventListener("trackPoint", async () => {
-  // Zkontrolovat, zda je tracking stále zapnutý
-  const enabledResult = await CapacitorKV.get({ key: "bg-tracking-enabled" });
-  if (!enabledResult || enabledResult.value !== "true") {
-    console.log("[runner] trackPoint přeskočen — tracking je vypnutý");
-    return;
-  }
-
-  // Načíst konfiguraci uloženou hlavní app
-  const sheetUrlResult = await CapacitorKV.get({ key: "sheet-url" });
-  const writeTokenResult = await CapacitorKV.get({ key: "write-token" });
-
-  const sheetUrl = sheetUrlResult && sheetUrlResult.value;
-  const writeToken = writeTokenResult && writeTokenResult.value;
-
-  if (!sheetUrl || !writeToken) {
-    console.warn("[runner] Chybí sheet-url nebo write-token v CapacitorKV, bod vynechán");
-    return;
-  }
-
-  // Získat GPS polohu
-  let lat = null;
-  let lon = null;
-  let speed = null;
-  let altitude = null;
-  let gpsAccuracy = null;
-
+addEventListener("trackPoint", async (resolve, reject) => {
   try {
-    const pos = await CapacitorGeolocation.getCurrentPosition({
-      enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 30000,
-    });
-    lat = pos.coords.latitude;
-    lon = pos.coords.longitude;
-    gpsAccuracy = pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : null;
-    if (pos.coords.speed !== null && pos.coords.speed >= 0) {
-      speed = Math.round(pos.coords.speed * 3.6 * 10) / 10;
+    const enabled = _getKv(TRACKING_ENABLED_KEY) === "true";
+    const sheetUrl = _getKv(SHEET_URL_KEY);
+    const writeToken = _getKv(WRITE_TOKEN_KEY);
+
+    if (!sheetUrl || !writeToken) {
+      console.warn("[runner] Chybí sheet-url nebo write-token, běh přeskočen");
+      resolve();
+      return;
     }
-    if (pos.coords.altitude !== null) {
-      altitude = Math.round(pos.coords.altitude);
+
+    if (!enabled) {
+      await _flushBackgroundQueue(sheetUrl, writeToken);
+      console.log("[runner] Tracking vypnutý, zkusil jsem flushnout BG frontu");
+      resolve();
+      return;
     }
-  } catch (gpsErr) {
-    console.warn("[runner] GPS nedostupná, bod vynechán:", String(gpsErr));
-    return;
+
+    if (!_shouldCaptureTrackPointNow()) {
+      console.log("[runner] Běh přeskočen — ještě neuplynul cílový interval");
+      await _flushBackgroundQueue(sheetUrl, writeToken);
+      resolve();
+      return;
+    }
+
+    const payload = await _buildTrackPayload(writeToken);
+    if (!payload) {
+      resolve();
+      return;
+    }
+
+    try {
+      await _postPayload(sheetUrl, payload);
+      console.log("[runner] Bod odeslán přímo na server");
+    } catch (err) {
+      console.warn("[runner] Odeslání selhalo, ukládám do BG fronty:", String(err));
+      await _enqueueBackground(payload, sheetUrl);
+    }
+
+    CapacitorKV.set(TRACKING_LAST_POINT_AT_KEY, payload.time);
+    await _flushBackgroundQueue(sheetUrl, writeToken);
+    resolve();
+  } catch (err) {
+    reject(err);
   }
-
-  // Získat stav baterie
-  let battery = null;
-  try {
-    const battInfo = await CapacitorDevice.getBatteryInfo();
-    if (battInfo && battInfo.batteryLevel != null) {
-      battery = Math.round(battInfo.batteryLevel * 100);
-    }
-  } catch {}
-
-  // Sestavit payload
-  const entryId = _generateUUID();
-  const payload = {
-    entry_id: entryId,
-    entry_type: "track",
-    time: new Date().toISOString(),
-    lat,
-    lon,
-    battery,
-    speed,
-    altitude,
-    gps_accuracy: gpsAccuracy,
-    token: writeToken,
-  };
-
-  // Odeslat na server
-  try {
-    const res = await fetch(sheetUrl, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    const text = await res.text();
-    console.log("[runner] Bod odeslán, status:", res.status, text.substring(0, 50));
-  } catch (fetchErr) {
-    // Uložit do offline fronty (CapacitorKV — jednoduchá fronta)
-    console.warn("[runner] Odeslání selhalo, ukládám do BG fronty:", String(fetchErr));
-    await _enqueueBackground(payload, sheetUrl);
-  }
-
-  // Pokusit se vyprázdnit BG frontu
-  await _flushBackgroundQueue(sheetUrl, writeToken);
 });
 
-// ── Pomocné funkce ────────────────────────────────────────────────────────────
+function _getKv(key) {
+  const result = CapacitorKV.get(key);
+  return result && typeof result.value === "string" ? result.value : "";
+}
 
 function _generateUUID() {
-  // Jednoduchý UUID v4 bez crypto (Background Runner context)
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
     const v = c === "x" ? r : (r & 0x3 | 0x8);
@@ -119,45 +108,131 @@ function _generateUUID() {
   });
 }
 
+function _shouldCaptureTrackPointNow() {
+  const intervalRaw = Number(_getKv(TRACKING_INTERVAL_KEY));
+  const targetIntervalMin = Number.isFinite(intervalRaw) && intervalRaw > 0
+    ? intervalRaw
+    : ANDROID_BG_MIN_INTERVAL_MIN;
+
+  const lastPointAt = _getKv(TRACKING_LAST_POINT_AT_KEY);
+  if (!lastPointAt) {
+    return true;
+  }
+
+  const lastPointMs = Date.parse(lastPointAt);
+  if (!Number.isFinite(lastPointMs)) {
+    return true;
+  }
+
+  return (Date.now() - lastPointMs) >= targetIntervalMin * 60 * 1000;
+}
+
+async function _buildTrackPayload(writeToken) {
+  let position;
+  try {
+    position = await CapacitorGeolocation.getCurrentPosition();
+  } catch (gpsErr) {
+    console.warn("[runner] GPS nedostupná, bod vynechán:", String(gpsErr));
+    return null;
+  }
+
+  let battery = null;
+  try {
+    const batteryStatus = CapacitorDevice.getBatteryStatus();
+    if (batteryStatus && batteryStatus.batteryLevel != null) {
+      battery = Math.round(batteryStatus.batteryLevel * 100);
+    }
+  } catch {}
+
+  return {
+    entry_id: _generateUUID(),
+    entry_type: "track",
+    time: new Date().toISOString(),
+    lat: position.latitude,
+    lon: position.longitude,
+    battery,
+    speed: (position.speed !== null && position.speed >= 0)
+      ? Math.round(position.speed * 3.6 * 10) / 10
+      : null,
+    altitude: position.altitude !== null && position.altitude !== undefined
+      ? Math.round(position.altitude)
+      : null,
+    gps_accuracy: position.accuracy != null ? Math.round(position.accuracy) : null,
+    token: writeToken,
+  };
+}
+
+async function _postPayload(sheetUrl, payload) {
+  const res = await fetch(sheetUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  if (!text) {
+    return;
+  }
+
+  try {
+    const data = JSON.parse(text);
+    if (data && data.ok === false) {
+      throw new Error(data.error || "api_error");
+    }
+  } catch (err) {
+    if (err instanceof SyntaxError) {
+      return;
+    }
+    throw err;
+  }
+}
+
 async function _enqueueBackground(payload, sheetUrl) {
   try {
-    const queueRaw = await CapacitorKV.get({ key: "bg-queue" });
-    const queue = queueRaw && queueRaw.value ? JSON.parse(queueRaw.value) : [];
+    const queueRaw = _getKv(BG_QUEUE_KEY);
+    const queue = queueRaw ? JSON.parse(queueRaw) : [];
     queue.push({ payload, url: sheetUrl, createdAt: new Date().toISOString() });
-    // Omezit frontu na 200 záznamů
-    const trimmed = queue.slice(-200);
-    await CapacitorKV.set({ key: "bg-queue", value: JSON.stringify(trimmed) });
-  } catch (e) {
-    console.error("[runner] Chyba při ukládání do BG fronty:", String(e));
+    CapacitorKV.set(BG_QUEUE_KEY, JSON.stringify(queue.slice(-200)));
+  } catch (err) {
+    console.error("[runner] Chyba při ukládání do BG fronty:", String(err));
   }
 }
 
 async function _flushBackgroundQueue(sheetUrl, writeToken) {
   try {
-    const queueRaw = await CapacitorKV.get({ key: "bg-queue" });
-    if (!queueRaw || !queueRaw.value) return;
+    const queueRaw = _getKv(BG_QUEUE_KEY);
+    if (!queueRaw) {
+      return;
+    }
 
-    const queue = JSON.parse(queueRaw.value);
-    if (!queue || queue.length === 0) return;
+    const queue = JSON.parse(queueRaw);
+    if (!Array.isArray(queue) || queue.length === 0) {
+      return;
+    }
 
     const remaining = [];
     for (const item of queue) {
       try {
-        const res = await fetch(item.url || sheetUrl, {
-          method: "POST",
-          body: JSON.stringify({ ...item.payload, token: writeToken }),
+        await _postPayload(item.url || sheetUrl, {
+          ...item.payload,
+          token: writeToken,
         });
-        if (!res.ok) {
-          remaining.push(item);
-        }
-      } catch {
+      } catch (err) {
         remaining.push(item);
-        break; // Při síťové chybě dál nezkoušet
+        if (!String(err && err.message || err).startsWith("HTTP 4")) {
+          break;
+        }
       }
     }
 
-    await CapacitorKV.set({ key: "bg-queue", value: JSON.stringify(remaining) });
-  } catch (e) {
-    console.error("[runner] Chyba při vyprazdňování BG fronty:", String(e));
+    CapacitorKV.set(BG_QUEUE_KEY, JSON.stringify(remaining));
+  } catch (err) {
+    console.error("[runner] Chyba při vyprazdňování BG fronty:", String(err));
   }
 }

@@ -46,6 +46,9 @@ function renderNotesList(validPoints) {
     } else if (entryType === "photo") {
       textEl.className = "note-text photo";
       textEl.textContent = "📷 Fotografie";
+    } else if (entryType === "track") {
+      textEl.className = "note-text";
+      textEl.textContent = "📍 Auto-tracking";
     } else {
       textEl.className = "note-text" + (noteText ? "" : " empty");
       textEl.textContent = noteText || "bez textu";
@@ -77,6 +80,9 @@ function renderNotesList(validPoints) {
     }
     if (entryType === "audio" && point.audio_duration_sec != null) {
       metaParts.push(`🎙 ${formatAudioDuration(point.audio_duration_sec)}`);
+    }
+    if (entryType === "track" && point.gps_accuracy != null) {
+      metaParts.push(`± ${point.gps_accuracy} m`);
     }
     if (point.speed != null) metaParts.push(`⚡ ${point.speed} km/h`);
     if (point.altitude != null) metaParts.push(`▲ ${point.altitude} m`);
