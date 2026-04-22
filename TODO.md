@@ -1,5 +1,11 @@
 # TODO
 
+- support - buy me a coffee, patreon, paypal?
+- kde držet data? google drive není ideální, ale pro MVP asi stačí (nejen fotky, ale i tokeny, poznámky, metadata). Možná nějaké jednoduché backendless řešení typu Firebase? Nebo vlastní server s REST API?
+- co to obnáší dostat aplikaci do Play Store? Jaké jsou požadavky, certifikace, bezpečnostní kontroly? Je to vůbec potřeba pro MVP?
+- jak řešit aktualizace? Bude potřeba nějaký mechanismus pro upozornění uživatelů na nové verze, nebo to bude čistě manuální proces přes Google Drive?
+- jaké jsou možnosti monetizace? Bude aplikace zdarma, nebo bude mít nějakou formu placeného obsahu, předplatného, nebo jednorázové platby? Jak to ovlivní vývoj a distribuci?
+
 ## Mobilní aplikace
 
 ## Web / Live mapa

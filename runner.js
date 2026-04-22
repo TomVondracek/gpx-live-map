@@ -56,9 +56,11 @@ addEventListener("trackPoint", async (resolve, reject) => {
       return;
     }
 
+    // Explicitně zkontrolovat, že KV obsahuje "true" — prázdná hodnota (autoStart
+    // bez předchozího startTracking eventu) se bere jako vypnuto, ne zapnuto.
     if (!enabled) {
       await _flushBackgroundQueue(sheetUrl, writeToken);
-      console.log("[runner] Tracking vypnutý, zkusil jsem flushnout BG frontu");
+      console.log("[runner] Tracking vypnutý nebo nebyl nikdy spuštěn, flushuji frontu");
       resolve();
       return;
     }
@@ -127,12 +129,24 @@ function _shouldCaptureTrackPointNow() {
   return (Date.now() - lastPointMs) >= targetIntervalMin * 60 * 1000;
 }
 
+const MAX_ACCEPTABLE_ACCURACY_M = 50; // body s horší přesností zahazujeme
+
 async function _buildTrackPayload(writeToken) {
   let position;
   try {
-    position = await CapacitorGeolocation.getCurrentPosition();
+    position = await CapacitorGeolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 10000,
+    });
   } catch (gpsErr) {
     console.warn("[runner] GPS nedostupná, bod vynechán:", String(gpsErr));
+    return null;
+  }
+
+  const accuracy = position.accuracy != null ? position.accuracy : null;
+  if (accuracy !== null && accuracy > MAX_ACCEPTABLE_ACCURACY_M) {
+    console.warn(`[runner] Bod zahozen — nízká přesnost GPS: ${Math.round(accuracy)} m (limit ${MAX_ACCEPTABLE_ACCURACY_M} m)`);
     return null;
   }
 

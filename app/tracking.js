@@ -190,8 +190,11 @@ async function startTracking(intervalMin) {
     const intervalMs = validInterval * 60 * 1000;
     _trackingTimerId = setInterval(sendTrackPoint, intervalMs);
     sendTrackPoint();
-    _startBackgroundRunner(validInterval);
   }
+
+  // Background Runner se spouští vždy (na Androidu i jiných platformách),
+  // aby byl KV stav synchronizovaný s UI stavem.
+  _startBackgroundRunner(validInterval);
 
   _trackingEnabled = true;
   _trackingIntervalMin = validInterval;
@@ -230,7 +233,6 @@ function stopTracking() {
 // ── Background Runner (Capacitor) ─────────────────────────────────────────────
 
 function _startBackgroundRunner(intervalMin) {
-  if (isNativeAndroidPlatform()) return;
   try {
     const BackgroundRunner = getCapacitorPlugin("CapacitorBackgroundRunner");
     if (!BackgroundRunner) return;
@@ -249,7 +251,6 @@ function _startBackgroundRunner(intervalMin) {
 }
 
 function _stopBackgroundRunner() {
-  if (isNativeAndroidPlatform()) return;
   try {
     const BackgroundRunner = getCapacitorPlugin("CapacitorBackgroundRunner");
     if (!BackgroundRunner) return;
