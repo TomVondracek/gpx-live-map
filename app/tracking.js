@@ -186,15 +186,16 @@ async function startTracking(intervalMin) {
       updateTrackingDialogUI();
       return false;
     }
+    // Nativní foreground service převzala tracking — Background Runner musí
+    // být explicitně zastaven, aby neposílal duplicitní body.
+    _stopBackgroundRunner();
   } else {
     const intervalMs = validInterval * 60 * 1000;
     _trackingTimerId = setInterval(sendTrackPoint, intervalMs);
     sendTrackPoint();
+    // Na non-Android platformách používáme Background Runner jako zálohu.
+    _startBackgroundRunner(validInterval);
   }
-
-  // Background Runner se spouští vždy (na Androidu i jiných platformách),
-  // aby byl KV stav synchronizovaný s UI stavem.
-  _startBackgroundRunner(validInterval);
 
   _trackingEnabled = true;
   _trackingIntervalMin = validInterval;
