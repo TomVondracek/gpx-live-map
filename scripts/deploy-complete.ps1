@@ -181,7 +181,7 @@ try {
   $stepStatus.sync = "ok"
 
   $currentStep = "gradle"
-  Invoke-StepCommand -FilePath ".\\gradlew" -Arguments @("assembleDebug") -WorkingDirectory $androidDir
+  Invoke-StepCommand -FilePath ".\\gradlew" -Arguments @("assembleDebug", "--no-daemon") -WorkingDirectory $androidDir
   $stepStatus.gradle = "ok"
   $buildMode = "fresh Gradle debug rebuild"
 

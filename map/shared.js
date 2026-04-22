@@ -63,10 +63,6 @@ const audioBlobUrlCache = new Map();
 const audioFetchPromises = new Map();
 
 async function downloadOrShareGpx(event) {
-  if (!isNativeApp) {
-    return;
-  }
-
   event.preventDefault();
 
   const downloadLink = document.getElementById("map-download-gpx");
@@ -83,6 +79,10 @@ async function downloadOrShareGpx(event) {
     }
 
     const blob = await response.blob();
+
+    // Zkusit Web Share API (funguje na mobilu i desktopu kde je podporováno).
+    // Pokud uživatel share sheet zavře (AbortError) nebo API není dostupné,
+    // fallback na klasický <a download>.
     const file = new File([blob], "trasa.gpx", {
       type: blob.type || "application/gpx+xml",
       lastModified: Date.now(),
@@ -93,14 +93,21 @@ async function downloadOrShareGpx(event) {
       navigator.canShare &&
       navigator.canShare({ files: [file] })
     ) {
-      await navigator.share({
-        files: [file],
-        title: "trasa.gpx",
-        text: "GPX trasa z UltraLogu",
-      });
-      return;
+      try {
+        await navigator.share({
+          files: [file],
+          title: "trasa.gpx",
+          text: "GPX trasa z UltraLogu",
+        });
+        return;
+      } catch (shareErr) {
+        // AbortError = uživatel zavřel share sheet → fallback na download
+        // Ostatní chyby také fallback
+        console.warn("navigator.share selhalo, používám fallback download:", shareErr);
+      }
     }
 
+    // Fallback: stažení přes dočasný <a download>
     const blobUrl = URL.createObjectURL(blob);
     const tempLink = document.createElement("a");
     tempLink.href = blobUrl;
@@ -108,7 +115,7 @@ async function downloadOrShareGpx(event) {
     document.body.appendChild(tempLink);
     tempLink.click();
     document.body.removeChild(tempLink);
-    URL.revokeObjectURL(blobUrl);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   } catch (error) {
     console.error("Stažení GPX trasy selhalo:", error);
     window.alert("GPX trasu se nepodařilo připravit ke stažení.");
