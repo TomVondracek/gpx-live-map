@@ -539,6 +539,14 @@
       box-shadow: 0 0 4px rgba(59, 130, 246, 0.6);
     }
 
+    .track-dot.is-latest {
+      width: 16px;
+      height: 16px;
+      background: #ef4444;
+      border-width: 3px;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.55);
+    }
+
     /* Popup pro track body — minimalistický */
     .track-popup .leaflet-popup-content-wrapper {
       background: rgba(15, 15, 26, 0.92);

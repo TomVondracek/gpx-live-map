@@ -6,6 +6,7 @@ interface ProjectConfig {
   readToken: string;
   gpxUrl: string;
   mapTokenStorageKey: string;
+  publicMapBaseUrl: string;
 }
 
 /** Částečná runtime konfigurace injektovaná přes runtime-config.js.
@@ -38,6 +39,7 @@ const PROJECT_DEFAULT_CONFIG: ProjectConfig = {
   readToken: "",
   gpxUrl: "./trasa.gpx",
   mapTokenStorageKey: "beh-poznamky-map-token",
+  publicMapBaseUrl: "https://tomvondracek.github.io/gpx-live-map/",
 };
 
 const PROJECT_CONFIG: ProjectConfig = {
@@ -46,4 +48,5 @@ const PROJECT_CONFIG: ProjectConfig = {
   readToken:            PROJECT_RUNTIME_CONFIG.readToken            || PROJECT_RUNTIME_CONFIG.mapToken  || "",
   gpxUrl:               PROJECT_RUNTIME_CONFIG.gpxUrl               || PROJECT_DEFAULT_CONFIG.gpxUrl,
   mapTokenStorageKey:   PROJECT_RUNTIME_CONFIG.mapTokenStorageKey   || PROJECT_DEFAULT_CONFIG.mapTokenStorageKey,
+  publicMapBaseUrl:     PROJECT_RUNTIME_CONFIG.publicMapBaseUrl     || PROJECT_DEFAULT_CONFIG.publicMapBaseUrl,
 };

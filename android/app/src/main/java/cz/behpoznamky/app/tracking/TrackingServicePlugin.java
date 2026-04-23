@@ -1,8 +1,11 @@
 package cz.behpoznamky.app.tracking;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 
 import androidx.core.content.ContextCompat;
 
@@ -90,6 +93,18 @@ public class TrackingServicePlugin extends Plugin {
         call.resolve(result);
     }
 
+    @PluginMethod
+    public void openTrackingSettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(Uri.fromParts("package", getContext().getPackageName(), null));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+
+        JSObject result = new JSObject();
+        result.put("opened", true);
+        call.resolve(result);
+    }
+
     @PermissionCallback
     private void locationPermissionCallback(PluginCall call) {
         if (!isLocationGranted()) {
@@ -111,6 +126,10 @@ public class TrackingServicePlugin extends Plugin {
 
     private void continuePermissionRequest(PluginCall call) {
         if (!isBackgroundLocationGranted()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                call.resolve(buildPermissionStatus());
+                return;
+            }
             requestPermissionForAlias("backgroundLocation", call, "backgroundLocationPermissionCallback");
             return;
         }
@@ -126,6 +145,8 @@ public class TrackingServicePlugin extends Plugin {
         result.put("locationGranted", isLocationGranted());
         result.put("backgroundGranted", isBackgroundLocationGranted());
         result.put("notificationsGranted", isNotificationGranted());
+        result.put("needsBackgroundInSettings", needsBackgroundPermissionInSettings());
+        result.put("backgroundPermissionLabel", getBackgroundPermissionLabel());
         result.put("canStart", canStartTracking());
         return result;
     }
@@ -147,5 +168,22 @@ public class TrackingServicePlugin extends Plugin {
     private boolean isNotificationGranted() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
             || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean needsBackgroundPermissionInSettings() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            && isLocationGranted()
+            && !isBackgroundLocationGranted();
+    }
+
+    private String getBackgroundPermissionLabel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return "Povolit vždy";
+        }
+        try {
+            return String.valueOf(getContext().getPackageManager().getBackgroundPermissionOptionLabel());
+        } catch (Exception ignored) {
+            return "Povolit vždy";
+        }
     }
 }

@@ -46,7 +46,7 @@ function getMapPageHref() {
 }
 
 function getMapLinkTarget() {
-  const baseHref = getMapPageHref();
+  const baseHref = (PROJECT_CONFIG && PROJECT_CONFIG.publicMapBaseUrl) || getMapPageHref();
   if (!READ_TOKEN) {
     return baseHref;
   }
@@ -54,7 +54,7 @@ function getMapLinkTarget() {
 }
 
 function getAbsoluteMapLinkTarget() {
-  return new URL(getMapLinkTarget(), window.location.href).toString();
+  return getMapLinkTarget();
 }
 
 async function copyTextToClipboard(text) {

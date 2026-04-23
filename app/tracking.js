@@ -368,6 +368,19 @@ async function _startNativeTrackingService(plugin, intervalMin) {
       permissions = await plugin.requestTrackingPermissions();
     }
 
+    if (permissions && permissions.needsBackgroundInSettings === true) {
+      const permissionLabel = permissions.backgroundPermissionLabel || "Povolit vždy";
+      showError(`Tracking potřebuje polohu na pozadí. V nastavení aplikace u Polohy zapni "${permissionLabel}" a potom tracking spusť znovu.`);
+      if (typeof plugin.openTrackingSettings === "function") {
+        try {
+          await plugin.openTrackingSettings();
+        } catch (openErr) {
+          console.warn("TrackingService openTrackingSettings selhalo:", openErr);
+        }
+      }
+      return false;
+    }
+
     if (!permissions || permissions.canStart !== true) {
       showError("Tracking potřebuje povolenou polohu na pozadí. V Android dialogu prosím povol \"Vždy\".");
       return false;

@@ -202,8 +202,8 @@ function renderMarkers(validPoints) {
 
   // Track body: deduplikovat (50m zona) a vykreslit jako malé modré kruhy
   const dedupedTrackPoints = deduplicateTrackPoints(trackPoints);
-  dedupedTrackPoints.forEach((point) => {
-    markers.push(createTrackMarker(point));
+  dedupedTrackPoints.forEach((point, index) => {
+    markers.push(createTrackMarker(point, index === 0));
   });
 
   // Ostatní záznamy: standardní multi-pin logika beze změny
@@ -301,13 +301,19 @@ function buildTrackPopup(point) {
   return wrapper;
 }
 
-function createTrackMarker(point) {
+function createTrackMarker(point, isLatestTrack = false) {
   const lat = Number(point.lat);
   const lon = Number(point.lon);
   const pointKey = getPointKey(point);
   const marker = L.marker([lat, lon], {
-    icon: trackIcon,
-    zIndexOffset: 100,
+    icon: L.divIcon({
+      className: "",
+      html: `<div class="track-dot${isLatestTrack ? " is-latest" : ""}"></div>`,
+      iconSize: isLatestTrack ? [16, 16] : [12, 12],
+      iconAnchor: isLatestTrack ? [8, 8] : [6, 6],
+      popupAnchor: [0, -8],
+    }),
+    zIndexOffset: isLatestTrack ? 180 : 100,
   }).addTo(map);
 
   marker.bindPopup(buildTrackPopup(point), {
