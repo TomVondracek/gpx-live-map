@@ -306,6 +306,7 @@ function setRecordingUI(active) {
   const btn = document.getElementById("btn-record");
   const audioBtn = document.getElementById("btn-audio");
   const photoBtn = document.getElementById("btn-photo");
+  const photoCameraToggleBtn = document.getElementById("btn-photo-camera-toggle");
   const indicator = document.getElementById("recording-indicator");
   const label = document.getElementById("recording-label");
 
@@ -317,6 +318,7 @@ function setRecordingUI(active) {
     audioBtn.classList.remove("recording");
     audioBtn.disabled = true;
     photoBtn.disabled = true;
+    photoCameraToggleBtn.disabled = true;
     indicator.classList.remove("hidden");
     label.textContent = "Diktování";
   } else if (active && activeCaptureMode === "audio") {
@@ -327,6 +329,7 @@ function setRecordingUI(active) {
     audioBtn.classList.add("recording");
     audioBtn.disabled = false;
     photoBtn.disabled = true;
+    photoCameraToggleBtn.disabled = true;
     indicator.classList.remove("hidden");
     label.textContent = "Nahrávám hlasovou poznámku";
   } else {
@@ -337,6 +340,7 @@ function setRecordingUI(active) {
     audioBtn.classList.remove("recording");
     audioBtn.disabled = !supportsMediaRecording();
     photoBtn.disabled = false;
+    photoCameraToggleBtn.disabled = false;
     indicator.classList.add("hidden");
     label.textContent = "Nahrávám";
   }

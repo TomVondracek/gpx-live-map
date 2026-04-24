@@ -1,3 +1,28 @@
+function getPhotoDirection() {
+  return photoCameraFacing === "front" ? "FRONT" : "REAR";
+}
+
+function updatePhotoCameraToggleUI() {
+  const toggleBtn = document.getElementById("btn-photo-camera-toggle");
+  if (!toggleBtn) return;
+
+  toggleBtn.textContent = photoCameraFacing === "front"
+    ? "Selfie foťák"
+    : "Zadní foťák";
+  toggleBtn.setAttribute(
+    "aria-label",
+    photoCameraFacing === "front"
+      ? "Aktivní je přední foťák, přepnout na zadní"
+      : "Aktivní je zadní foťák, přepnout na přední",
+  );
+}
+
+function togglePhotoCameraFacing() {
+  photoCameraFacing = photoCameraFacing === "front" ? "rear" : "front";
+  vibrate("light");
+  updatePhotoCameraToggleUI();
+}
+
 // ── Foto záznam ──────────────────────────────────────────────────────────────
 async function takePhoto() {
   const Camera = getCapacitorPlugin("Camera");
@@ -12,7 +37,8 @@ async function takePhoto() {
       resultType: "base64",
       saveToGallery: true,
       width: 1200,
-      source: "CAMERA"
+      source: "CAMERA",
+      direction: getPhotoDirection(),
     });
 
     discardNote({ keepMessages: true });

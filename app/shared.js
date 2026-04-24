@@ -59,6 +59,7 @@ let wakeLock = null;
 let lastGpsAccuracy = null;
 let lastGpsCoords = null;
 let gpsWatchId = null;
+let photoCameraFacing = "rear";
 
 // ── Haptická odezva ───────────────────────────────────────────────────────────
 async function vibrate(type = "light") {
