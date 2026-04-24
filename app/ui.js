@@ -45,7 +45,14 @@ function getMapPageHref() {
   return "./index.html";
 }
 
-function getMapLinkTarget() {
+function isNativeAppShell() {
+  return typeof window !== "undefined"
+    && typeof window.Capacitor !== "undefined"
+    && typeof window.Capacitor.isNativePlatform === "function"
+    && window.Capacitor.isNativePlatform();
+}
+
+function getPublicMapLinkTarget() {
   const baseHref = (PROJECT_CONFIG && PROJECT_CONFIG.publicMapBaseUrl) || getMapPageHref();
   if ((PROJECT_CONFIG && PROJECT_CONFIG.publicReadEnabled) || !READ_TOKEN) {
     return baseHref;
@@ -53,8 +60,15 @@ function getMapLinkTarget() {
   return `${baseHref}#token=${encodeURIComponent(READ_TOKEN)}`;
 }
 
+function getMapLinkTarget() {
+  if (isNativeAppShell()) {
+    return getMapPageHref();
+  }
+  return getPublicMapLinkTarget();
+}
+
 function getAbsoluteMapLinkTarget() {
-  return getMapLinkTarget();
+  return getPublicMapLinkTarget();
 }
 
 async function copyTextToClipboard(text) {

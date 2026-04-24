@@ -60,13 +60,13 @@
 
     #map-links {
       position: fixed;
-      top: 16px;
-      right: 16px;
+      left: 16px;
+      bottom: 74px;
       z-index: 100;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      align-items: flex-end;
+      align-items: flex-start;
     }
 
     .map-link-btn {
@@ -479,6 +479,14 @@
         align-items: center;
       }
 
+      #map-links {
+        top: 16px;
+        right: 16px;
+        left: auto;
+        bottom: auto;
+        align-items: flex-end;
+      }
+
       #map-back {
         display: inline-flex;
         align-items: center;
@@ -488,6 +496,10 @@
         left: 50%;
         bottom: 24px;
         transform: translateX(-50%);
+      }
+
+      #map-download-gpx:active {
+        transform: translateX(-50%) scale(0.97);
       }
 
       #notes-panel {
