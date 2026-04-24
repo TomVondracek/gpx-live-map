@@ -39,6 +39,12 @@ function getExpectedToken_(mode) {
   return "";
 }
 
+function getPublicReadEnabled_() {
+  const props = PropertiesService.getScriptProperties();
+  const value = props.getProperty("PUBLIC_READ_ENABLED") || props.getProperty("ALLOW_PUBLIC_READ") || "";
+  return /^(1|true|yes|on)$/i.test(String(value).trim());
+}
+
 function secureEquals_(left, right) {
   if (typeof left !== "string" || typeof right !== "string") return false;
   if (left.length !== right.length) return false;
@@ -51,6 +57,10 @@ function secureEquals_(left, right) {
 }
 
 function isAuthorized_(providedToken, mode) {
+  if (mode === "read" && getPublicReadEnabled_()) {
+    return true;
+  }
+
   const expectedToken = getExpectedToken_(mode);
   if (!expectedToken || !providedToken) return false;
   return secureEquals_(String(providedToken), expectedToken);

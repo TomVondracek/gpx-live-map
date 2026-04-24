@@ -54,12 +54,16 @@ function getMapToken() {
   return readStoredMapToken();
 }
 
+function isPublicMapReadEnabled() {
+  return Boolean(PROJECT_CONFIG && PROJECT_CONFIG.publicReadEnabled);
+}
+
 function getSheetDataUrl(since = null) {
   const token = getMapToken();
-  if (!token) return null;
+  if (!token && !isPublicMapReadEnabled()) return null;
 
   const url = new URL(SHEET_URL);
-  url.searchParams.set("token", token);
+  if (token) url.searchParams.set("token", token);
   if (since) url.searchParams.set("since", since);
   return url.toString();
 }

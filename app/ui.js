@@ -47,7 +47,7 @@ function getMapPageHref() {
 
 function getMapLinkTarget() {
   const baseHref = (PROJECT_CONFIG && PROJECT_CONFIG.publicMapBaseUrl) || getMapPageHref();
-  if (!READ_TOKEN) {
+  if ((PROJECT_CONFIG && PROJECT_CONFIG.publicReadEnabled) || !READ_TOKEN) {
     return baseHref;
   }
   return `${baseHref}#token=${encodeURIComponent(READ_TOKEN)}`;

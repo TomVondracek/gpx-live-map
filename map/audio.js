@@ -1,9 +1,10 @@
 function getAudioDataUrl(fileId) {
   const token = getMapToken();
-  if (!token || !fileId) return null;
+  const publicReadEnabled = Boolean(PROJECT_CONFIG && PROJECT_CONFIG.publicReadEnabled);
+  if (!fileId || (!publicReadEnabled && !token)) return null;
 
   const url = new URL(SHEET_URL);
-  url.searchParams.set("token", token);
+  if (token) url.searchParams.set("token", token);
   url.searchParams.set("audioFileId", fileId);
   return url.toString();
 }
@@ -20,7 +21,7 @@ async function fetchAudioBlobUrl(fileId) {
   const promise = (async () => {
     const url = getAudioDataUrl(fileId);
     if (!url) {
-      throw new Error("missing_audio_token");
+      throw new Error("missing_audio_access");
     }
 
     const res = await fetch(url, { cache: "no-store" });

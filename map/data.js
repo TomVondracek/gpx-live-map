@@ -674,7 +674,7 @@ async function loadFull() {
     renderNotesList(allRecords);
   } catch (error) {
     console.error("Načtení mapových dat selhalo:", error);
-    setNotesStatus("Nepodařilo se načíst poznámky. Zkontroluj přístupový token.");
+    setNotesStatus("Nepodařilo se načíst poznámky.");
   } finally {
     isRefreshingMarkers = false;
   }

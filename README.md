@@ -7,7 +7,7 @@ Mobilní Android aplikace pro zaznamenávání poznámek při běhu (text / audi
 ## Deploy Status
 
 <!-- DEPLOY_STATUS:START -->
-- Poslední úspěšný deploy: 2026-04-23 13:56:01
+- Poslední úspěšný deploy: 2026-04-24 07:25:45
 - Agent: Codex (GPT-5.4)
 - APK build: fresh Gradle debug rebuild
 - APK cesta: `android\app\build\outputs\apk\debug\app-debug.apk`
@@ -211,7 +211,8 @@ node scripts/generate-icons.js
 - **Foto lightbox:** fullscreen overlay, klávesa Escape, plné rozlišení (w1600)
 - **Telemetrie:** pozice na trase (km), rychlost (km/h), nadmořská výška (m), počasí (OpenMeteo)
 - **Favicon:** inline SVG (stejný design jako ikona aplikace)
-- Přístup chráněn tokenem: `map.html#token=READ_TOKEN`
+- Dočasné odkazy vpravo nahoře: `Gearlist`, `Rozpis trasy`
+- V tomhle repu je dočasně zapnutý veřejný read režim mapy (`publicReadEnabled: true`)
 
 ### 4. Backend (`appscript.js`)
 
@@ -219,6 +220,7 @@ node scripts/generate-icons.js
 
 - `doPost(e)` — parsuje JSON, ukládá text/audio/foto. Audio a foto dekóduje z Base64 → Google Drive.
 - `doGet(e)` — vrací všechny řádky jako JSON; na vyžádání vrací audio soubor jako Base64.
+- Public read lze dočasně povolit přes Script Property `PUBLIC_READ_ENABLED=true` (tokenový write režim zůstává zachovaný).
 - **POZOR:** POST nesmí obsahovat `Content-Type` header (CORS preflight workaround).
 - **POZOR:** Po nasazení spusť v editoru dummy funkci s `DriveApp.getFiles()` pro udělení Drive oprávnění.
 
