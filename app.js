@@ -31,8 +31,6 @@ async function init() {
       await takePhoto();
     }
   });
-  document.getElementById("btn-photo-camera-toggle").addEventListener("click", togglePhotoCameraFacing);
-  updatePhotoCameraToggleUI();
 
   document.getElementById("btn-send").addEventListener("click", sendNote);
   document.getElementById("btn-discard").addEventListener("click", discardNote);

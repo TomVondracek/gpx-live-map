@@ -157,10 +157,6 @@
       grid-column: 1 / -1; /* Roztáhne se přes oba sloupce (bude nahoře uprostřed) */
     }
 
-    #btn-photo-camera-toggle {
-      grid-column: 2;
-    }
-
     .capture-btn {
       width: min(44vw, 172px);
       height: min(44vw, 172px);
@@ -217,32 +213,6 @@
       opacity: 0.6;
       cursor: not-allowed;
       animation: none;
-    }
-
-    .capture-secondary-btn {
-      min-height: 42px;
-      min-width: min(44vw, 172px);
-      padding: 0 16px;
-      border: 1px solid rgba(42, 157, 143, 0.35);
-      border-radius: 999px;
-      background: rgba(42, 157, 143, 0.1);
-      color: #8be7db;
-      font: inherit;
-      font-size: 0.86rem;
-      font-weight: 600;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-      transition: background 0.15s, transform 0.1s, opacity 0.15s;
-    }
-
-    .capture-secondary-btn:active {
-      transform: scale(0.97);
-    }
-
-    .capture-secondary-btn:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
     }
 
     /* ── Přepis textu ── */
