@@ -621,6 +621,35 @@ function setLatestActivePoint(validPoints) {
   hasShownInitialLatestPopup = true;
 }
 
+function compareRecordsByTime(left, right) {
+  const leftTime = String(left && left.time || "");
+  const rightTime = String(right && right.time || "");
+  if (leftTime !== rightTime) {
+    return leftTime < rightTime ? -1 : 1;
+  }
+
+  const leftId = String(left && left.entry_id || "");
+  const rightId = String(right && right.entry_id || "");
+  if (leftId === rightId) return 0;
+  return leftId < rightId ? -1 : 1;
+}
+
+function getRecordMergeKey(record) {
+  if (record && record.entry_id) {
+    return `id:${record.entry_id}`;
+  }
+  return `point:${getPointKey(record || {})}`;
+}
+
+function mergeRecords(existingRecords, incomingRecords) {
+  const merged = new Map();
+  [...existingRecords, ...incomingRecords]
+    .filter((point) => point != null)
+    .forEach((point) => merged.set(getRecordMergeKey(point), point));
+
+  return [...merged.values()].sort(compareRecordsByTime);
+}
+
 function updateTimestamp(data) {
   const timestamps = data.map((point) => String(point && point.time || "")).filter(Boolean);
   if (timestamps.length === 0) {
@@ -656,7 +685,10 @@ async function loadFull() {
 
     allPoints = validPoints;
     allRecords = data.filter((point) => point != null);
+    allRecords.sort(compareRecordsByTime);
+    allPoints.sort(compareRecordsByTime);
     lastTimestamp = null;
+    lastFullLoadAt = Date.now();
     updateTimestamp(data);
     setLatestActivePoint(validPoints);
 
@@ -700,14 +732,11 @@ async function loadIncremental() {
       return;
     }
 
-    const newValidPoints = data.filter(isRenderablePoint);
-    if (newValidPoints.length > 0) {
-      allPoints = allPoints.concat(newValidPoints);
-      renderTrack(allPoints);
-      renderMarkers(allPoints);
-    }
+    allRecords = mergeRecords(allRecords, data);
+    allPoints = allRecords.filter(isRenderablePoint);
+    renderTrack(allPoints);
+    renderMarkers(allPoints);
 
-    allRecords = allRecords.concat(data.filter((point) => point != null));
     updateTimestamp(data);
     renderNotesList(allRecords);
   } catch (error) {
@@ -724,7 +753,8 @@ async function loadData() {
   const isAudioPlaying = Array.from(document.querySelectorAll("audio")).some((audio) => !audio.paused && !audio.ended);
   if (isAudioPlaying) return;
 
-  if (lastTimestamp === null) {
+  const shouldFullRefresh = lastTimestamp === null || Date.now() - lastFullLoadAt >= 60 * 1000;
+  if (shouldFullRefresh) {
     await loadFull();
   } else {
     await loadIncremental();

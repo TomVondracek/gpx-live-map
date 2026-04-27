@@ -30,6 +30,7 @@ let userScrolled = false;
 let lastTimestamp = null;   // ISO string posledního načteného záznamu (null = full load)
 let allPoints = [];         // kumulativní seznam všech validních bodů (s lat/lon)
 let allRecords = [];        // všechny záznamy včetně těch bez GPS
+let lastFullLoadAt = 0;     // kdy mapa naposledy stáhla celý sheet
 
 const WEATHER_ICONS = {
   0: "☀️",

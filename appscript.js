@@ -106,6 +106,29 @@ function ensureHeaders_(sheet) {
   }
 }
 
+function sortSheetByTime_(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 2) return;
+
+  sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).sort({
+    column: 1,
+    ascending: true,
+  });
+}
+
+function compareRowsByTime_(left, right) {
+  const leftTime = String(left && left[0] || "");
+  const rightTime = String(right && right[0] || "");
+  if (leftTime !== rightTime) {
+    return leftTime < rightTime ? -1 : 1;
+  }
+
+  const leftEntryId = String(left && left[14] || "");
+  const rightEntryId = String(right && right[14] || "");
+  if (leftEntryId === rightEntryId) return 0;
+  return leftEntryId < rightEntryId ? -1 : 1;
+}
+
 function resolveAudioFolder_() {
   const folderId = PropertiesService.getScriptProperties().getProperty("AUDIO_FOLDER_ID");
   if (folderId) {
@@ -300,6 +323,7 @@ function doPost(e) {
       entryId,
       gpsAccuracy,
     ]);
+    sortSheetByTime_(sheet);
 
     return jsonOutput_({ ok: true, entryType, audioFileId });
   } catch (err) {
@@ -323,7 +347,7 @@ function doGet(e) {
     }
 
     const data = sheet.getDataRange().getValues();
-    const allRows = data.slice(1);
+    const allRows = data.slice(1).sort(compareRowsByTime_);
 
     // Inkrementální synchronizace: vrátit jen záznamy novější než ?since=<ISO>
     // ISO timestamps jsou lexikograficky srovnatelné — string porovnání funguje správně.
