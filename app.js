@@ -44,6 +44,7 @@ async function init() {
 
   configureMapLinks();
   configureMapShareButton();
+  initVisitorInbox();
 
   initSpeech().then(() => {
     updateStatus();

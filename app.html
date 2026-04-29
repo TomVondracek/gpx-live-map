@@ -24,68 +24,86 @@
     </div>
 
   <main>
-    <div id="recording-indicator" class="hidden">
-      <span class="dot"></span> <span id="recording-label">Nahrávám</span>
-    </div>
-
-    <div id="capture-actions">
-      <button id="btn-record" class="capture-btn">TEXT</button>
-      <button id="btn-audio" class="capture-btn">ZVUK</button>
-      <button id="btn-photo" class="capture-btn">FOTO</button>
-    </div>
-
-    <textarea id="transcript" class="hidden" placeholder="Přepis se zobrazí zde…" readonly rows="2"></textarea>
-
-    <section id="audio-preview" class="hidden" aria-label="Náhled hlasové poznámky">
-      <div id="audio-preview-header">
-        <span>Hlasová poznámka</span>
-        <span id="audio-preview-meta">čekám na nahrávku…</span>
+    <section id="capture-screen">
+      <div id="recording-indicator" class="hidden">
+        <span class="dot"></span> <span id="recording-label">Nahrávám</span>
       </div>
-      <audio id="audio-player" controls preload="metadata"></audio>
+
+      <div id="capture-actions">
+        <button id="btn-record" class="capture-btn">TEXT</button>
+        <button id="btn-audio" class="capture-btn">ZVUK</button>
+        <button id="btn-photo" class="capture-btn">FOTO</button>
+      </div>
+
+      <textarea id="transcript" class="hidden" placeholder="Přepis se zobrazí zde…" readonly rows="2"></textarea>
+
+      <section id="audio-preview" class="hidden" aria-label="Náhled hlasové poznámky">
+        <div id="audio-preview-header">
+          <span>Hlasová poznámka</span>
+          <span id="audio-preview-meta">čekám na nahrávku…</span>
+        </div>
+        <audio id="audio-player" controls preload="metadata"></audio>
+      </section>
+
+      <section id="photo-preview" class="hidden" aria-label="Náhled fotografie">
+        <img id="photo-preview-img" alt="Zatím žádná fotka" />
+      </section>
+
+      <details id="diagnostics" hidden>
+        <summary>Diagnostika STT</summary>
+        <div id="diagnostics-body">
+          <div class="diag-row">
+            <div class="diag-label">Engine</div>
+            <div class="diag-value" id="diag-engine">zjišťuji…</div>
+          </div>
+          <div class="diag-row">
+            <div class="diag-label">Model</div>
+            <div class="diag-value" id="diag-model">zjišťuji…</div>
+          </div>
+          <div class="diag-row">
+            <div class="diag-label">Stav</div>
+            <div class="diag-value" id="diag-status">zjišťuji…</div>
+          </div>
+          <div class="diag-row">
+            <div class="diag-label">Aktivní režim</div>
+            <div class="diag-value" id="diag-mode">zjišťuji…</div>
+          </div>
+          <div class="diag-row">
+            <div class="diag-label">Info</div>
+            <div class="diag-value" id="diag-hint">Počkej na inicializaci.</div>
+          </div>
+        </div>
+      </details>
+
+      <div id="section-confirm" class="hidden">
+        <button class="btn" id="btn-send">Odeslat</button>
+        <button class="btn" id="btn-discard">Zrušit</button>
+      </div>
+
+      <div id="section-error" class="hidden"></div>
+      <div id="section-success" class="hidden"></div>
     </section>
 
-    <section id="photo-preview" class="hidden" aria-label="Náhled fotografie">
-      <img id="photo-preview-img" alt="Zatím žádná fotka" />
-    </section>
-
-    <details id="diagnostics" hidden>
-      <summary>Diagnostika STT</summary>
-      <div id="diagnostics-body">
-        <div class="diag-row">
-          <div class="diag-label">Engine</div>
-          <div class="diag-value" id="diag-engine">zjišťuji…</div>
+    <section id="visitor-inbox-screen" class="hidden" aria-label="Zprávy od lidí">
+      <div id="visitor-inbox-header">
+        <div>
+          <p id="visitor-inbox-kicker">Soukromý přehled</p>
+          <h2>Zprávy od lidí</h2>
         </div>
-        <div class="diag-row">
-          <div class="diag-label">Model</div>
-          <div class="diag-value" id="diag-model">zjišťuji…</div>
-        </div>
-        <div class="diag-row">
-          <div class="diag-label">Stav</div>
-          <div class="diag-value" id="diag-status">zjišťuji…</div>
-        </div>
-        <div class="diag-row">
-          <div class="diag-label">Aktivní režim</div>
-          <div class="diag-value" id="diag-mode">zjišťuji…</div>
-        </div>
-        <div class="diag-row">
-          <div class="diag-label">Info</div>
-          <div class="diag-value" id="diag-hint">Počkej na inicializaci.</div>
-        </div>
+        <button id="visitor-inbox-close" type="button" aria-label="Zavřít zprávy">✕</button>
       </div>
-    </details>
-
-    <div id="section-confirm" class="hidden">
-      <button class="btn" id="btn-send">Odeslat</button>
-      <button class="btn" id="btn-discard">Zrušit</button>
-    </div>
-
-    <div id="section-error" class="hidden"></div>
-    <div id="section-success" class="hidden"></div>
+      <div id="visitor-inbox-actions">
+        <button id="visitor-inbox-refresh" type="button" class="secondary-pill-btn">Obnovit</button>
+      </div>
+      <div id="visitor-inbox-status" aria-live="polite">Načítám zprávy…</div>
+      <div id="visitor-inbox-list"></div>
+    </section>
   </main>
 
   <footer>
     <div class="footer-actions">
       <a href="./index.html" data-map-link>Zobrazit mapu</a>
+      <button type="button" data-open-visitor-messages>Zobrazit zprávy</button>
       <button type="button" data-copy-map-link>Sdílej mapu</button>
     </div>
   </footer>
@@ -142,6 +160,7 @@
   <script src="./app/photo.js"></script>
   <script src="./app/api.js"></script>
   <script src="./app/ui.js"></script>
+  <script src="./app/messages.js"></script>
   <script src="./app/tracking.js"></script>
   <script src="./app.js"></script>
 </body>

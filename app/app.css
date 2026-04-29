@@ -111,6 +111,30 @@
       padding: 24px 20px;
     }
 
+    main.is-scroll-screen {
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow-y: auto;
+    }
+
+    #capture-screen,
+    #visitor-inbox-screen {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    #capture-screen.hidden,
+    #visitor-inbox-screen.hidden {
+      display: none;
+    }
+
+    #capture-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
     /* ── Indikátor nahrávání ── */
     #recording-indicator {
       display: flex;
@@ -476,6 +500,139 @@
     }
 
     #section-success.hidden { display: none; }
+
+    /* ── Inbox zpráv od lidí ── */
+    #visitor-inbox-screen {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 100%;
+    }
+
+    #visitor-inbox-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    #visitor-inbox-kicker {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    #visitor-inbox-header h2 {
+      font-size: 1.45rem;
+      line-height: 1.1;
+    }
+
+    #visitor-inbox-close {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--muted);
+      font-size: 1rem;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    #visitor-inbox-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .secondary-pill-btn {
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .secondary-pill-btn:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    #visitor-inbox-status {
+      min-height: 1.3em;
+      font-size: 0.84rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    #visitor-inbox-status[data-tone="success"] {
+      color: #88ffcc;
+    }
+
+    #visitor-inbox-status[data-tone="error"] {
+      color: #ffaaaa;
+    }
+
+    #visitor-inbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-bottom: 20px;
+    }
+
+    .visitor-message-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(230, 57, 70, 0.16);
+      border-radius: 18px;
+      padding: 14px 15px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+    }
+
+    .visitor-message-badge {
+      display: inline-flex;
+      margin-bottom: 8px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(230, 57, 70, 0.16);
+      color: #ffd0d5;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .visitor-message-meta {
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+
+    .visitor-message-text {
+      color: var(--text);
+      font-size: 0.98rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .visitor-message-empty {
+      padding: 18px;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.5;
+    }
 
     /* ── Queue badge (klikatelný počet čekajících) ── */
     #queue-badge {
