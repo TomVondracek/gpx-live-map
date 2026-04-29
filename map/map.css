@@ -114,6 +114,118 @@
       transform: scale(0.97);
     }
 
+    #visitor-message-card {
+      position: fixed;
+      right: calc(var(--panel-w) + 16px);
+      bottom: 24px;
+      z-index: 120;
+      width: min(360px, calc(100vw - var(--panel-w) - 48px));
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(24, 24, 40, 0.96), rgba(15, 15, 26, 0.94));
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    #visitor-message-title {
+      margin-bottom: 12px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    #visitor-message-form {
+      display: grid;
+      gap: 10px;
+    }
+
+    .visitor-field {
+      display: grid;
+      gap: 6px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .visitor-field span {
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .visitor-field input,
+    .visitor-field textarea {
+      width: 100%;
+      min-height: 44px;
+      padding: 11px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font: inherit;
+      resize: vertical;
+    }
+
+    .visitor-field textarea {
+      min-height: 92px;
+    }
+
+    .visitor-field input:focus,
+    .visitor-field textarea:focus {
+      outline: none;
+      border-color: rgba(42, 157, 143, 0.9);
+      box-shadow: 0 0 0 3px rgba(42, 157, 143, 0.16);
+    }
+
+    .visitor-honeypot {
+      position: absolute;
+      left: -10000px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    #visitor-submit {
+      padding: 12px 16px;
+      border: none;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #2a9d8f, #38b2ac);
+      color: #fff;
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.12s ease, filter 0.15s ease;
+    }
+
+    #visitor-submit:hover {
+      filter: brightness(1.05);
+    }
+
+    #visitor-submit:active {
+      transform: scale(0.98);
+    }
+
+    #visitor-submit:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
+    #visitor-message-status {
+      min-height: 1.2em;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    #visitor-message-status[data-tone="success"] {
+      color: #7ce6c2;
+    }
+
+    #visitor-message-status[data-tone="error"] {
+      color: #ff9aa2;
+    }
+
     .multi-pin-marker {
       width: 36px;
       height: 36px;
@@ -348,6 +460,43 @@
       opacity: 0.55;
     }
 
+    .note-item.visitor-message {
+      opacity: 1;
+      border-left-color: rgba(230, 57, 70, 0.6);
+      background: linear-gradient(90deg, rgba(230, 57, 70, 0.12), rgba(230, 57, 70, 0.02));
+    }
+
+    .note-item.visitor-message.active {
+      border-left-color: var(--red);
+      background: linear-gradient(90deg, rgba(230, 57, 70, 0.18), rgba(42, 157, 143, 0.06));
+    }
+
+    .note-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .note-badge.visitor {
+      color: #ffd6da;
+      background: rgba(230, 57, 70, 0.18);
+      border: 1px solid rgba(230, 57, 70, 0.22);
+    }
+
+    .note-sender {
+      margin-bottom: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #ffd6da;
+    }
+
     .note-time {
       font-size: 0.72rem;
       color: var(--muted);
@@ -519,6 +668,13 @@
 
       #notes-panel.open {
         transform: translateY(0);
+      }
+
+      #visitor-message-card {
+        right: 16px;
+        left: 16px;
+        width: auto;
+        bottom: 86px;
       }
 
       #notes-close {

@@ -15,12 +15,19 @@ const SHEET_HEADERS_ = [
   "photo_file_id",  // col 14 (index 13)
   "entry_id",       // col 15 (index 14) — klientské UUID pro deduplication
   "gps_accuracy",   // col 16 (index 15) — přesnost GPS v metrech (pouze entry_type=track)
+  "sender_name",    // col 17 (index 16) — jméno autora veřejné zprávy
+  "visitor_id",     // col 18 (index 17) — lokální identifikátor návštěvníka pro throttling
 ];
 
 const ENTRY_TYPE_TEXT_ = "text";
 const ENTRY_TYPE_AUDIO_ = "audio";
 const ENTRY_TYPE_PHOTO_ = "photo";
 const ENTRY_TYPE_TRACK_ = "track";
+const ENTRY_TYPE_VISITOR_MESSAGE_ = "visitor_message";
+const VISITOR_MESSAGE_MAX_NAME_ = 40;
+const VISITOR_MESSAGE_MAX_TEXT_ = 500;
+const VISITOR_MESSAGE_MIN_INTERVAL_SEC_ = 45;
+const VISITOR_DUPLICATE_WINDOW_SEC_ = 5 * 60;
 
 function jsonOutput_(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(
@@ -42,6 +49,15 @@ function getExpectedToken_(mode) {
 function getPublicReadEnabled_() {
   const props = PropertiesService.getScriptProperties();
   const value = props.getProperty("PUBLIC_READ_ENABLED") || props.getProperty("ALLOW_PUBLIC_READ") || "";
+  return /^(1|true|yes|on)$/i.test(String(value).trim());
+}
+
+function getPublicMessageEnabled_() {
+  const props = PropertiesService.getScriptProperties();
+  const value = props.getProperty("PUBLIC_MESSAGE_ENABLED") || props.getProperty("ALLOW_PUBLIC_MESSAGE") || "";
+  if (value === "") {
+    return true;
+  }
   return /^(1|true|yes|on)$/i.test(String(value).trim());
 }
 
@@ -186,10 +202,66 @@ function entryTypeFromRow_(row) {
 }
 function normalizeEntryType_(value) {
   const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === ENTRY_TYPE_AUDIO_ || normalized === ENTRY_TYPE_PHOTO_ || normalized === ENTRY_TYPE_TRACK_) {
+  if (
+    normalized === ENTRY_TYPE_AUDIO_
+    || normalized === ENTRY_TYPE_PHOTO_
+    || normalized === ENTRY_TYPE_TRACK_
+    || normalized === ENTRY_TYPE_VISITOR_MESSAGE_
+  ) {
     return normalized;
   }
   return ENTRY_TYPE_TEXT_;
+}
+
+function normalizeVisitorMessageField_(value, maxLength) {
+  return String(value || "").trim().slice(0, maxLength);
+}
+
+function normalizeVisitorId_(value) {
+  return String(value || "").trim().slice(0, 120);
+}
+
+function getVisitorMessageFingerprint_(data) {
+  const senderName = normalizeVisitorMessageField_(data.sender_name, VISITOR_MESSAGE_MAX_NAME_).toLowerCase();
+  const note = normalizeVisitorMessageField_(data.note, VISITOR_MESSAGE_MAX_TEXT_).toLowerCase();
+  return Utilities.base64EncodeWebSafe(`${senderName}|${note}`).slice(0, 120);
+}
+
+function validateVisitorMessage_(data) {
+  if (!getPublicMessageEnabled_()) {
+    throw new Error("public_messages_disabled");
+  }
+
+  if (String(data.website || "").trim() !== "") {
+    throw new Error("invalid_visitor_message");
+  }
+
+  const senderName = normalizeVisitorMessageField_(data.sender_name, VISITOR_MESSAGE_MAX_NAME_);
+  const note = normalizeVisitorMessageField_(data.note, VISITOR_MESSAGE_MAX_TEXT_);
+  const visitorId = normalizeVisitorId_(data.visitor_id);
+
+  if (!senderName || !note || !visitorId) {
+    throw new Error("invalid_visitor_message");
+  }
+
+  return {
+    senderName,
+    note,
+    visitorId,
+  };
+}
+
+function enforceVisitorMessageThrottle_(data) {
+  const cache = CacheService.getScriptCache();
+  const visitorThrottleKey = `visitor-msg:${data.visitorId}`;
+  const duplicateKey = `visitor-dup:${getVisitorMessageFingerprint_({ sender_name: data.senderName, note: data.note })}`;
+
+  if (cache.get(visitorThrottleKey) || cache.get(duplicateKey)) {
+    throw new Error("visitor_rate_limited");
+  }
+
+  cache.put(visitorThrottleKey, "1", VISITOR_MESSAGE_MIN_INTERVAL_SEC_);
+  cache.put(duplicateKey, "1", VISITOR_DUPLICATE_WINDOW_SEC_);
 }
 
 function isKnownAudioFileId_(sheet, fileId) {
@@ -268,7 +340,10 @@ function readAudioFile_(sheet, fileId) {
 function doPost(e) {
   try {
     const data = JSON.parse((e && e.postData && e.postData.contents) || "{}");
-    if (!isAuthorized_(data.token, "write")) {
+    const entryType = normalizeEntryType_(data.entry_type);
+    const isVisitorMessage = entryType === ENTRY_TYPE_VISITOR_MESSAGE_;
+
+    if (!isVisitorMessage && !isAuthorized_(data.token, "write")) {
       return jsonOutput_({ ok: false, error: "unauthorized" });
     }
 
@@ -281,8 +356,22 @@ function doPost(e) {
       return jsonOutput_({ ok: true, duplicate: true });
     }
 
-    const weather = getWeatherSnapshot_(data);
-    const entryType = normalizeEntryType_(data.entry_type);
+    let senderName = "";
+    let visitorId = "";
+    if (isVisitorMessage) {
+      const visitorMessage = validateVisitorMessage_(data);
+      enforceVisitorMessageThrottle_(visitorMessage);
+      senderName = visitorMessage.senderName;
+      visitorId = visitorMessage.visitorId;
+      data.note = visitorMessage.note;
+      data.lat = null;
+      data.lon = null;
+      data.battery = "";
+      data.speed = "";
+      data.altitude = "";
+    }
+
+    const weather = isVisitorMessage ? { temp: "", wcode: "" } : getWeatherSnapshot_(data);
 
     let audioFileId = "";
     let audioMime = "";
@@ -322,6 +411,8 @@ function doPost(e) {
       photoFileId,
       entryId,
       gpsAccuracy,
+      senderName,
+      visitorId,
     ]);
     sortSheetByTime_(sheet);
 
@@ -373,6 +464,8 @@ function doGet(e) {
       photo_file_id: row[13] || "",
       entry_id: row[14] || "",
       gps_accuracy: parseIntOrNull_(row[15]),
+      sender_name: row[16] || "",
+      visitor_id: row[17] || "",
     }));
 
     return jsonOutput_(result);

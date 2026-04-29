@@ -10,6 +10,7 @@ const PROJECT_DEFAULT_CONFIG = {
   mapTokenStorageKey: "beh-poznamky-map-token",
   publicMapBaseUrl: "https://tomvondracek.github.io/gpx-live-map/",
   publicReadEnabled: true,
+  publicMessageEnabled: true,
 };
 
 const PROJECT_CONFIG = {
@@ -20,4 +21,5 @@ const PROJECT_CONFIG = {
   mapTokenStorageKey: PROJECT_RUNTIME_CONFIG.mapTokenStorageKey || PROJECT_DEFAULT_CONFIG.mapTokenStorageKey,
   publicMapBaseUrl: PROJECT_RUNTIME_CONFIG.publicMapBaseUrl || PROJECT_DEFAULT_CONFIG.publicMapBaseUrl,
   publicReadEnabled: PROJECT_RUNTIME_CONFIG.publicReadEnabled === true,
+  publicMessageEnabled: PROJECT_RUNTIME_CONFIG.publicMessageEnabled !== false,
 };

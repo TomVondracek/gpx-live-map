@@ -29,11 +29,19 @@ function renderNotesList(validPoints) {
     const hasGps = point.lat !== null && point.lat !== "" && point.lon !== null && point.lon !== "";
     const pointKey = getPointKey(point);
     const entryType = getEntryType(point);
+    const isVisitorMessage = entryType === ENTRY_TYPE_VISITOR_MESSAGE;
 
     const item = document.createElement("div");
-    item.className = "note-item" + (hasGps ? "" : " no-gps");
+    item.className = "note-item" + (hasGps ? "" : " no-gps") + (isVisitorMessage ? " visitor-message" : "");
     item.dataset.pointKey = pointKey;
     if (activePointKey === pointKey) item.classList.add("active");
+
+    if (isVisitorMessage) {
+      const badgeEl = document.createElement("div");
+      badgeEl.className = "note-badge visitor";
+      badgeEl.textContent = "Zpráva pro tebe";
+      item.appendChild(badgeEl);
+    }
 
     const timeEl = document.createElement("div");
     timeEl.className = "note-time";
@@ -41,12 +49,16 @@ function renderNotesList(validPoints) {
 
     const textEl = document.createElement("div");
     const noteText = (point.note ?? "").trim();
+    const senderName = String(point.sender_name || "").trim();
     if (entryType === "audio") {
       textEl.className = "note-text audio";
       textEl.textContent = "▶ Hlasová poznámka";
     } else if (entryType === "photo") {
       textEl.className = "note-text photo";
       textEl.textContent = "📷 Fotografie";
+    } else if (isVisitorMessage) {
+      textEl.className = "note-text" + (noteText ? "" : " empty");
+      textEl.textContent = noteText || "bez textu";
     } else if (entryType === "track") {
       textEl.className = "note-text";
       textEl.textContent = "📍 Auto-tracking";
@@ -56,6 +68,14 @@ function renderNotesList(validPoints) {
     }
 
     item.appendChild(timeEl);
+
+    if (isVisitorMessage && senderName) {
+      const senderEl = document.createElement("div");
+      senderEl.className = "note-sender";
+      senderEl.textContent = `Od: ${senderName}`;
+      item.appendChild(senderEl);
+    }
+
     item.appendChild(textEl);
 
     if (entryType === "audio") {
@@ -78,6 +98,9 @@ function renderNotesList(validPoints) {
       const emoji = getWeatherEmoji(point.weather_code);
       const temp = point.weather_temp != null ? ` ${Math.round(point.weather_temp)}°C` : "";
       metaParts.push(`${emoji}${temp}`);
+    }
+    if (isVisitorMessage) {
+      metaParts.push("Veřejný vzkaz");
     }
     if (entryType === "audio" && point.audio_duration_sec != null) {
       metaParts.push(`🎙 ${formatAudioDuration(point.audio_duration_sec)}`);

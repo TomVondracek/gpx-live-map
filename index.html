@@ -24,6 +24,26 @@
   <a class="map-link-btn" href="https://docs.google.com/spreadsheets/d/1hemJfNkNlABpqTwtqYmIUWCRfa6RWAKIU8NcrT4Thj4/edit?usp=sharing" target="_blank" rel="noopener" aria-label="Rozpis trasy – kilometry, místa, občerstvení">📋 Rozpis trasy</a>
 </div>
 
+<section id="visitor-message-card" aria-label="Poslat zprávu běžci">
+  <div id="visitor-message-title">Napiš mi vzkaz</div>
+  <form id="visitor-message-form">
+    <label class="visitor-field">
+      <span>Jméno</span>
+      <input id="visitor-name" name="senderName" type="text" maxlength="40" autocomplete="name" placeholder="Tvoje jméno" required />
+    </label>
+    <label class="visitor-field">
+      <span>Zpráva</span>
+      <textarea id="visitor-text" name="messageText" rows="3" maxlength="500" placeholder="Držím palce, běžíš skvěle!" required></textarea>
+    </label>
+    <div class="visitor-honeypot" aria-hidden="true">
+      <label for="visitor-website">Web</label>
+      <input id="visitor-website" name="website" type="text" tabindex="-1" autocomplete="off" />
+    </div>
+    <button id="visitor-submit" type="submit">Odeslat zprávu</button>
+    <p id="visitor-message-status" aria-live="polite"></p>
+  </form>
+</section>
+
 <!-- Lightbox pro fotky -->
 <div id="lightbox" role="dialog" aria-modal="true" aria-label="Fotografie v plné velikosti">
   <button id="lightbox-close" aria-label="Zavřít">×</button>
@@ -57,6 +77,7 @@
 <script src="./map/utils.js"></script>
 <script src="./map/audio.js"></script>
 <script src="./map/panel.js"></script>
+<script src="./map/messages.js"></script>
 <script src="./map/data.js"></script>
 </body>
 </html>
